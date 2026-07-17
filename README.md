@@ -16,8 +16,14 @@ The initial executable foundation includes:
 - Ask/Plan/Agent capability policy with exact-call approvals;
 - a host-owned tool registry that never invokes denied side effects.
 
-It does **not** currently claim a cloud provider, editor agent, gameplay behavior
-tree, or local model execution. Those integrate in separately tested layers.
+The optional `KairoAICloud` target provides a real OpenAI-compatible Chat
+Completions adapter over pinned CPR and nlohmann/json revisions. It supports
+fragmented SSE text, tool-call assembly, usage, cancellation, HTTPS enforcement,
+bounded responses, and secret-safe errors. Tests use an injected transport and
+never require credentials or network access.
+
+It does **not** currently claim an editor chat panel, gameplay behavior tree, or
+local model execution. Those integrate in separately tested layers.
 
 ## Build
 
@@ -28,6 +34,17 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+The default core build fetches no cloud transport dependency. Build and test
+the optional pinned CPR adapter explicitly when cloud access is required:
+
+```bash
+cmake -S . -B build-cloud -G Ninja \
+  -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++ \
+  -DKAIRO_AI_BUILD_CLOUD_PROVIDER=ON
+cmake --build build-cloud
+ctest --test-dir build-cloud --output-on-failure
+```
+
 ## Architecture
 
 ```text
@@ -36,6 +53,9 @@ Kairo.AI.Provider       synchronous provider boundary + owned async task
 Kairo.AI.ToolPolicy     capability modes, exact approvals, host tool registry
 Kairo.AI.MockProvider   deterministic scripted provider for tests
 Kairo.AI                public umbrella module
+Kairo.AI.OpenAICompatible  validated Chat Completions stream protocol
+Kairo.AI.CprTransport      pinned production HTTPS transport
+Kairo.AI.Cloud             optional cloud umbrella module
 ```
 
 Providers execute on a worker owned by `RequestTask`; render, physics, and UI
