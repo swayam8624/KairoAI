@@ -68,3 +68,44 @@ TEST_CASE("Asynchronous AI tasks cancel cooperatively without detached callbacks
     CHECK(task.StopRequested());
     CHECK(callbacks.load() < 100u);
 }
+
+TEST_CASE("Tool policy separates read context from permissioned side effects", "[KairoAI][Policy]")
+{
+    ToolRegistry registry;
+    std::size_t reads = 0u;
+    std::size_t mutations = 0u;
+    registry.Register({ "project.search", ToolCapability::ReadProject, "Search indexed project text." },
+        [&](std::string_view query) { ++reads; return std::string("match:") + std::string(query); });
+    registry.Register({ "scene.create", ToolCapability::MutateProject, "Create an undoable scene entity." },
+        [&](std::string_view arguments) { ++mutations; return std::string(arguments); });
+    registry.Register({ "secret.read", ToolCapability::AccessCredential, "Read a provider credential." },
+        [](std::string_view) { return std::string("must-never-run"); });
+
+    const ToolCall read{ "read-1", "project.search", "camera" };
+    const ToolExecution askRead = registry.Execute(InteractionMode::Ask, read);
+    CHECK(askRead.Invoked);
+    CHECK(askRead.Output == "match:camera");
+    CHECK(reads == 1u);
+
+    const ToolCall mutation{ "write-1", "scene.create", R"({"name":"Cube"})" };
+    CHECK(registry.Execute(InteractionMode::Plan, mutation).AuthorizationResult.Decision ==
+        AuthorizationDecision::DeniedByMode);
+    CHECK(registry.Execute(InteractionMode::Agent, mutation).AuthorizationResult.Decision ==
+        AuthorizationDecision::ApprovalRequired);
+    CHECK(mutations == 0u);
+
+    ToolApproval mismatched{ mutation.ID, mutation.Name, R"({"name":"Sphere"})", true };
+    CHECK(registry.Execute(InteractionMode::Agent, mutation, mismatched).AuthorizationResult.Decision ==
+        AuthorizationDecision::ApprovalMismatch);
+    CHECK(mutations == 0u);
+
+    ToolApproval exact{ mutation.ID, mutation.Name, mutation.Arguments, true };
+    const ToolExecution approved = registry.Execute(InteractionMode::Agent, mutation, exact);
+    CHECK(approved.Invoked);
+    CHECK(mutations == 1u);
+
+    const ToolCall credential{ "secret-1", "secret.read", "OPENAI_API_KEY" };
+    ToolApproval secretApproval{ credential.ID, credential.Name, credential.Arguments, true };
+    CHECK(registry.Execute(InteractionMode::Agent, credential, secretApproval).AuthorizationResult.Decision ==
+        AuthorizationDecision::CredentialAccessDenied);
+}

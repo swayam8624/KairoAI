@@ -17,7 +17,7 @@ endif()
 add_library(KairoAI)
 add_library(Kairo::AI ALIAS KairoAI)
 target_sources(KairoAI PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR} FILES
-    AIContracts.cppm AIProvider.cppm MockAIProvider.cppm KairoAI.cppm)
+    AIContracts.cppm AIProvider.cppm AIToolPolicy.cppm MockAIProvider.cppm KairoAI.cppm)
 
 if(KAIRO_AI_BUILD_TESTS)
     include(FetchContent)

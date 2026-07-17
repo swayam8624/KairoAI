@@ -13,6 +13,8 @@ The initial executable foundation includes:
 - cooperative cancellation with owned `std::jthread` lifetime;
 - provider-reported response and usage contracts;
 - a deterministic, credential-free mock provider for CI.
+- Ask/Plan/Agent capability policy with exact-call approvals;
+- a host-owned tool registry that never invokes denied side effects.
 
 It does **not** currently claim a cloud provider, editor agent, gameplay behavior
 tree, or local model execution. Those integrate in separately tested layers.
@@ -31,6 +33,7 @@ ctest --test-dir build --output-on-failure
 ```text
 Kairo.AI.Contracts      bounded persistent request/response values
 Kairo.AI.Provider       synchronous provider boundary + owned async task
+Kairo.AI.ToolPolicy     capability modes, exact approvals, host tool registry
 Kairo.AI.MockProvider   deterministic scripted provider for tests
 Kairo.AI                public umbrella module
 ```
