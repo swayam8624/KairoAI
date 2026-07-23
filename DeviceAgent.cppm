@@ -44,6 +44,27 @@ export namespace kairo::ai::device
         IntentNotBound
     };
 
+    /// The adapter reports execution facts; it does not decide whether a
+    /// request was authorized. `Kairo.AI.ToolPolicy` remains that boundary.
+    enum class ExecutionStatus : std::uint8_t
+    {
+        NotExecuted,
+        Succeeded,
+        RejectedByAdapter,
+        Failed
+    };
+
+    /// Verification is intentionally separate from execution. A native API
+    /// call can succeed while the visible application state remains stale or
+    /// does not match the requested postcondition.
+    enum class VerificationDecision : std::uint8_t
+    {
+        NotAttempted,
+        Verified,
+        Failed,
+        Ambiguous
+    };
+
     struct Evidence final
     {
         EvidenceKind Kind = EvidenceKind::Gesture;
@@ -84,6 +105,60 @@ export namespace kairo::ai::device
             return Decision == ProposalDecision::Proposed && Call.has_value();
         }
     };
+
+    /// Input: the exact authorized call and application-adapter result.
+    /// Output: a receipt that can be joined with a proposal and verification.
+    /// Task: record host execution without giving an adapter authority to alter
+    /// the call identity or evidence provenance.
+    struct ActionReceipt final
+    {
+        std::string CallID;
+        std::string AdapterID;
+        ExecutionStatus Status = ExecutionStatus::NotExecuted;
+        std::string UndoToken;
+        std::string Detail;
+        std::uint64_t CompletedAtMonotonicMilliseconds = 0u;
+    };
+
+    /// Input: a state observation made after execution.
+    /// Output: deterministic verification status and an opaque state fingerprint.
+    /// Task: retain the evidence that the intended visible/app state occurred
+    /// without forcing each adapter into a shared UI representation.
+    struct ActionVerification final
+    {
+        std::string CallID;
+        VerificationDecision Decision = VerificationDecision::NotAttempted;
+        std::string StateFingerprint;
+        std::string Detail;
+        std::uint64_t ObservedAtMonotonicMilliseconds = 0u;
+    };
+
+    /// The in-memory canonical record for fixtures, local persistence adapters,
+    /// and correction curation. A storage layer may serialize it, but must not
+    /// invent or alter any of the identity-bearing fields.
+    struct ReplayRecord final
+    {
+        ToolCall Call;
+        std::string ActiveApplicationID;
+        std::vector<std::string> EvidenceIDs;
+        ActionReceipt Receipt;
+        ActionVerification Verification;
+    };
+
+    [[nodiscard]] inline ReplayRecord MakeReplayRecord(const ActionProposal& proposal,
+        std::string activeApplicationID, ActionReceipt receipt, ActionVerification verification)
+    {
+        if (!proposal.ReadyForAuthorization() || activeApplicationID.empty())
+            throw std::invalid_argument("Replay records require a proposed call and active application id.");
+        if (receipt.CallID != proposal.Call->ID || verification.CallID != proposal.Call->ID)
+            throw std::invalid_argument("Replay receipt and verification must match the exact proposed call id.");
+        if (receipt.AdapterID.empty())
+            throw std::invalid_argument("Replay receipts require an application adapter id.");
+        if (verification.Decision != VerificationDecision::NotAttempted && verification.StateFingerprint.empty())
+            throw std::invalid_argument("Completed verification requires an observed state fingerprint.");
+        return { *proposal.Call, std::move(activeApplicationID), proposal.EvidenceIDs,
+            std::move(receipt), std::move(verification) };
+    }
 
     /// Input: registered application bindings and trusted perception evidence.
     /// Output: a proposal containing an exact `ToolCall`, or a refusal reason.

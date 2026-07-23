@@ -54,3 +54,26 @@ TEST_CASE("Device agent refuses weak, missing, mismatched, and unbound requests"
     weak.Intent = IntentKind::SplitSelectedClip;
     CHECK(router.Propose(weak).Decision == ProposalDecision::IntentNotBound);
 }
+
+TEST_CASE("Device agent joins only exact execution and verification records into replay", "[KairoAI][DeviceAgent]")
+{
+    IntentRouter router;
+    router.Register(PremiereTrimBinding());
+    const ActionProposal proposal = router.Propose({ "com.adobe.Premiere", IntentKind::TrimSelectedClip,
+        { { EvidenceKind::Gesture, "gesture-17", 0.97f, 10u },
+          { EvidenceKind::ScreenState, "timeline-visible", 0.99f, 11u },
+          { EvidenceKind::SelectionState, "clip-selected", 0.98f, 12u } } });
+    REQUIRE(proposal.Call.has_value());
+
+    ActionReceipt receipt{ proposal.Call->ID, "premiere.uxp.v25", ExecutionStatus::Succeeded,
+        "undo-42", "Trim command accepted.", 20u };
+    ActionVerification verification{ proposal.Call->ID, VerificationDecision::Verified,
+        "timeline:selected-clip:trimmed", "Timeline reflects the requested trim.", 21u };
+    const ReplayRecord record = MakeReplayRecord(proposal, "com.adobe.Premiere", receipt, verification);
+    CHECK(record.Call == *proposal.Call);
+    CHECK(record.Receipt.UndoToken == "undo-42");
+    CHECK(record.Verification.Decision == VerificationDecision::Verified);
+
+    receipt.CallID = "wrong-call";
+    CHECK_THROWS_AS(MakeReplayRecord(proposal, "com.adobe.Premiere", receipt, verification), std::invalid_argument);
+}

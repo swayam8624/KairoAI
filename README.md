@@ -17,6 +17,8 @@ The initial executable foundation includes:
 - a host-owned tool registry that never invokes denied side effects.
 - a local device-agent intent router that converts verified gesture, speech,
   screen, audio, and selection evidence into registered app-action proposals.
+- adapter-neutral execution receipts, state verification results, and exact-call
+  replay records for local audit and correction curation.
 
 The optional `KairoAICloud` target provides a real OpenAI-compatible Chat
 Completions adapter over pinned CPR and nlohmann/json revisions. It supports
@@ -75,7 +77,10 @@ typed evidence with calibrated confidence; host-owned app adapters construct
 canonical arguments only after confirming visible application state. The router
 then creates a `ToolCall` only when a registered action, active application,
 required evidence, and threshold all match. The normal `ToolPolicy` approval
-path remains mandatory before any mutation runs.
+path remains mandatory before any mutation runs. An adapter reports an
+`ActionReceipt`; independently observed post-action state produces an
+`ActionVerification`; `MakeReplayRecord` refuses to join records whose call IDs
+do not exactly match the original proposal.
 
 Credentials are outside this core and must come from the OS keychain or process
 environment. They must never be serialized into Kairo projects or logs.
