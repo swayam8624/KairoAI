@@ -15,6 +15,8 @@ The initial executable foundation includes:
 - a deterministic, credential-free mock provider for CI.
 - Ask/Plan/Agent capability policy with exact-call approvals;
 - a host-owned tool registry that never invokes denied side effects.
+- a local device-agent intent router that converts verified gesture, speech,
+  screen, audio, and selection evidence into registered app-action proposals.
 
 The optional `KairoAICloud` target provides a real OpenAI-compatible Chat
 Completions adapter over pinned CPR and nlohmann/json revisions. It supports
@@ -51,6 +53,7 @@ ctest --test-dir build-cloud --output-on-failure
 Kairo.AI.Contracts      bounded persistent request/response values
 Kairo.AI.Provider       synchronous provider boundary + owned async task
 Kairo.AI.ToolPolicy     capability modes, exact approvals, host tool registry
+Kairo.AI.DeviceAgent    multimodal evidence to app-specific action proposals
 Kairo.AI.MockProvider   deterministic scripted provider for tests
 Kairo.AI                public umbrella module
 Kairo.AI.OpenAICompatible  validated Chat Completions stream protocol
@@ -65,6 +68,14 @@ joins the worker, so stream callbacks cannot outlive their owner.
 Tool calls are data, not authority. A future editor integration must translate
 them into typed editor commands, show a preview/diff, request permission, and
 retain undo and provenance. Project text is always untrusted input.
+
+`Kairo.AI.DeviceAgent` is deliberately not a screen scraper, an OS automation
+adapter, or a language-model control loop. Host-owned perception adapters emit
+typed evidence with calibrated confidence; host-owned app adapters construct
+canonical arguments only after confirming visible application state. The router
+then creates a `ToolCall` only when a registered action, active application,
+required evidence, and threshold all match. The normal `ToolPolicy` approval
+path remains mandatory before any mutation runs.
 
 Credentials are outside this core and must come from the OS keychain or process
 environment. They must never be serialized into Kairo projects or logs.
