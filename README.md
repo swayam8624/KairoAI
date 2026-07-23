@@ -82,5 +82,14 @@ path remains mandatory before any mutation runs. An adapter reports an
 `ActionVerification`; `MakeReplayRecord` refuses to join records whose call IDs
 do not exactly match the original proposal.
 
+Every registered device action also carries a versioned `ActionContract` with
+typed risk, approval policy, state preconditions, expected effects, rollback
+mode, and bounded verification requirements. The contract is copied into the
+proposal and replay record, so a model or adapter cannot weaken it after intent
+resolution. Registration rejects undeclared verification effects, reversible
+actions without rollback operations, snapshot restoration without pre-action
+capture, high-risk actions without explicit approval, and irreversible actions
+without independent-device approval.
+
 Credentials are outside this core and must come from the OS keychain or process
 environment. They must never be serialized into Kairo projects or logs.

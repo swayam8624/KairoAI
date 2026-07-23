@@ -10,7 +10,28 @@ namespace
     {
         return { "com.adobe.Premiere", IntentKind::TrimSelectedClip, "premiere.clip.trim",
             R"({"operation":"trim-selected-clip"})", { EvidenceKind::Gesture, EvidenceKind::ScreenState,
-                EvidenceKind::SelectionState }, 0.90f };
+                EvidenceKind::SelectionState }, 0.90f,
+            ActionContract{
+                .SchemaVersion = 1u,
+                .Risk = ActionRisk::Medium,
+                .Approval = ApprovalPolicy::Explicit,
+                .Preconditions = {
+                    { "timeline-visible", "Premiere timeline is visible.", "timeline:visible" },
+                    { "clip-selected", "Exactly one clip is selected.", "selection:single-clip" }
+                },
+                .Effects = {
+                    { "clip-trimmed", "Selected clip boundaries match the requested trim.", "selected-clip" }
+                },
+                .Rollback = {
+                    .Mode = Reversibility::SnapshotRestorable,
+                    .AdapterOperation = "premiere.clip.restore",
+                    .CaptureBeforeState = true
+                },
+                .Verification = {
+                    .RequiredEffectIDs = { "clip-trimmed" },
+                    .TimeoutMilliseconds = 5'000u
+                }
+            } };
     }
 }
 
@@ -28,7 +49,9 @@ TEST_CASE("Device agent proposes only a verified registered app action", "[Kairo
     REQUIRE(proposal.ReadyForAuthorization());
     CHECK(proposal.Decision == ProposalDecision::Proposed);
     REQUIRE(proposal.Call.has_value());
+    REQUIRE(proposal.Contract.has_value());
     CHECK(proposal.Call->Name == "premiere.clip.trim");
+    CHECK(proposal.Contract->Rollback.CaptureBeforeState);
     CHECK(proposal.EvidenceIDs.size() == 3u);
 }
 
@@ -71,9 +94,27 @@ TEST_CASE("Device agent joins only exact execution and verification records into
         "timeline:selected-clip:trimmed", "Timeline reflects the requested trim.", 21u };
     const ReplayRecord record = MakeReplayRecord(proposal, "com.adobe.Premiere", receipt, verification);
     CHECK(record.Call == *proposal.Call);
+    CHECK(record.Contract.Risk == ActionRisk::Medium);
     CHECK(record.Receipt.UndoToken == "undo-42");
     CHECK(record.Verification.Decision == VerificationDecision::Verified);
 
     receipt.CallID = "wrong-call";
     CHECK_THROWS_AS(MakeReplayRecord(proposal, "com.adobe.Premiere", receipt, verification), std::invalid_argument);
+}
+
+TEST_CASE("Device action contracts reject unsafe approval and rollback combinations", "[KairoAI][DeviceAgent]")
+{
+    ActionContract unsafe = PremiereTrimBinding().Contract;
+    unsafe.Risk = ActionRisk::High;
+    unsafe.Approval = ApprovalPolicy::None;
+    CHECK_THROWS_AS(ValidateActionContract(unsafe), std::invalid_argument);
+
+    unsafe = PremiereTrimBinding().Contract;
+    unsafe.Rollback.Mode = Reversibility::Irreversible;
+    unsafe.Rollback.AdapterOperation.clear();
+    CHECK_THROWS_AS(ValidateActionContract(unsafe), std::invalid_argument);
+
+    unsafe = PremiereTrimBinding().Contract;
+    unsafe.Verification.RequiredEffectIDs = { "undeclared-effect" };
+    CHECK_THROWS_AS(ValidateActionContract(unsafe), std::invalid_argument);
 }
