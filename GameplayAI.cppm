@@ -35,12 +35,13 @@ export namespace kairo::ai::gameplay
     struct EntityReference final
     {
         std::uint64_t Value = 0u;
-        friend constexpr bool operator==(const EntityReference&, const EntityReference&) noexcept = default;
+        friend constexpr bool operator==(const EntityReference&,
+            const EntityReference&) noexcept = default;
     };
 
-    /// The gameplay AI layer expresses movement intent but deliberately does not
-    /// own graph search. KairoSpatial remains the single navigation/A* source of
-    /// truth and a host bridge translates this request into a spatial query.
+    /// Movement request emitted by cognition. KairoSpatial remains the single
+    /// owner of NavigationGraph/A*; GameEngine adapters translate this intent
+    /// into the appropriate spatial path query and locomotion command.
     struct NavigationIntent final
     {
         WorldPosition Destination{};
@@ -86,7 +87,8 @@ export namespace kairo::ai::gameplay
                 throw std::out_of_range("Gameplay blackboard key does not exist.");
             const auto* value = std::get_if<T>(&found->second);
             if (value == nullptr)
-                throw std::invalid_argument("Gameplay blackboard value has a different type.");
+                throw std::invalid_argument(
+                    "Gameplay blackboard value has a different type.");
             return *value;
         }
 
@@ -98,7 +100,8 @@ export namespace kairo::ai::gameplay
                 throw std::out_of_range("Gameplay blackboard key does not exist.");
             auto* value = std::get_if<T>(&found->second);
             if (value == nullptr)
-                throw std::invalid_argument("Gameplay blackboard value has a different type.");
+                throw std::invalid_argument(
+                    "Gameplay blackboard value has a different type.");
             return *value;
         }
 
@@ -114,9 +117,11 @@ export namespace kairo::ai::gameplay
         void ValidateKey(std::string_view key) const
         {
             if (key.empty() || key.size() > MaximumKeyBytes)
-                throw std::invalid_argument("Gameplay blackboard key length is invalid.");
+                throw std::invalid_argument(
+                    "Gameplay blackboard key length is invalid.");
             if (!m_Values.contains(key) && m_Values.size() >= MaximumEntries)
-                throw std::length_error("Gameplay blackboard exceeds its entry budget.");
+                throw std::length_error(
+                    "Gameplay blackboard exceeds its entry budget.");
         }
 
         static void ValidateValue(const BlackboardValue& value)
@@ -127,22 +132,23 @@ export namespace kairo::ai::gameplay
                 if constexpr (std::is_same_v<T, double>)
                 {
                     if (!std::isfinite(entry))
-                        throw std::invalid_argument("Gameplay blackboard number must be finite.");
+                        throw std::invalid_argument(
+                            "Gameplay blackboard number must be finite.");
                 }
                 else if constexpr (std::is_same_v<T, std::string>)
                 {
                     if (entry.size() > MaximumStringBytes)
-                        throw std::length_error("Gameplay blackboard string exceeds its byte budget.");
+                        throw std::length_error(
+                            "Gameplay blackboard string exceeds its byte budget.");
                 }
                 else if constexpr (std::is_same_v<T, WorldPosition>)
                 {
                     if (!entry.IsFinite())
-                        throw std::invalid_argument("Gameplay blackboard position must be finite.");
+                        throw std::invalid_argument(
+                            "Gameplay blackboard position must be finite.");
                 }
                 else if constexpr (std::is_same_v<T, NavigationIntent>)
-                {
                     entry.Validate();
-                }
             }, value);
         }
     };
@@ -169,11 +175,12 @@ export namespace kairo::ai::gameplay
 
     using BehaviorNodeID = std::uint32_t;
     inline constexpr BehaviorNodeID InvalidBehaviorNode = 0u;
-    using BehaviorLeaf = std::function<BehaviorStatus(Blackboard&, const BehaviorContext&)>;
+    using BehaviorLeaf = std::function<BehaviorStatus(
+        Blackboard&, const BehaviorContext&)>;
 
-    /// Stateful deterministic behavior tree. Composite cursors persist while a
-    /// descendant reports Running, so a multi-frame action resumes rather than
-    /// restarting at the beginning of the tree every frame.
+    /// Deterministic, stateful behavior tree. A composite cursor remains on the
+    /// child that returned Running, allowing multi-frame actions to resume on
+    /// the next simulation tick instead of restarting the tree each frame.
     class BehaviorTree final
     {
         enum class NodeKind : std::uint8_t
@@ -196,23 +203,27 @@ export namespace kairo::ai::gameplay
     public:
         [[nodiscard]] BehaviorNodeID AddAction(BehaviorLeaf action)
         {
-            if (!action) throw std::invalid_argument("Behavior action callback is required.");
+            if (!action)
+                throw std::invalid_argument("Behavior action callback is required.");
             return AddNode({ NodeKind::Action, std::move(action), {} });
         }
 
         [[nodiscard]] BehaviorNodeID AddCondition(BehaviorLeaf condition)
         {
-            if (!condition) throw std::invalid_argument("Behavior condition callback is required.");
+            if (!condition)
+                throw std::invalid_argument("Behavior condition callback is required.");
             return AddNode({ NodeKind::Condition, std::move(condition), {} });
         }
 
-        [[nodiscard]] BehaviorNodeID AddSequence(std::vector<BehaviorNodeID> children)
+        [[nodiscard]] BehaviorNodeID AddSequence(
+            std::vector<BehaviorNodeID> children)
         {
             ValidateChildren(children, false);
             return AddNode({ NodeKind::Sequence, {}, std::move(children) });
         }
 
-        [[nodiscard]] BehaviorNodeID AddSelector(std::vector<BehaviorNodeID> children)
+        [[nodiscard]] BehaviorNodeID AddSelector(
+            std::vector<BehaviorNodeID> children)
         {
             ValidateChildren(children, false);
             return AddNode({ NodeKind::Selector, {}, std::move(children) });
@@ -244,9 +255,9 @@ export namespace kairo::ai::gameplay
             context.Validate();
             if (m_Root == InvalidBehaviorNode)
                 throw std::logic_error("Behavior tree has no root node.");
-            const BehaviorStatus result = TickNode(m_Root, blackboard, context, 0u);
-            if (result != BehaviorStatus::Running) m_Cursors.clear();
-            return result;
+            const auto status = TickNode(m_Root, blackboard, context, 0u);
+            if (status != BehaviorStatus::Running) m_Cursors.clear();
+            return status;
         }
 
         void Reset() noexcept { m_Cursors.clear(); }
@@ -266,7 +277,7 @@ export namespace kairo::ai::gameplay
                 throw std::length_error("Behavior tree exceeds its node budget.");
             if (m_Next == InvalidBehaviorNode)
                 throw std::overflow_error("Behavior tree exhausted its node ID space.");
-            const BehaviorNodeID id = m_Next++;
+            const auto id = m_Next++;
             m_Nodes.emplace(id, std::move(node));
             return id;
         }
@@ -274,8 +285,10 @@ export namespace kairo::ai::gameplay
         void ValidateChildren(const std::vector<BehaviorNodeID>& children,
             bool exactlyOne) const
         {
-            if ((exactlyOne && children.size() != 1u) || (!exactlyOne && children.empty()))
-                throw std::invalid_argument("Behavior composite has an invalid child count.");
+            if ((exactlyOne && children.size() != 1u) ||
+                (!exactlyOne && children.empty()))
+                throw std::invalid_argument(
+                    "Behavior composite has an invalid child count.");
             for (const auto child : children) (void)RequireNode(child);
         }
 
@@ -295,12 +308,13 @@ export namespace kairo::ai::gameplay
                 std::size_t depth) -> void
             {
                 if (depth > MaximumDepth)
-                    throw std::length_error("Behavior tree exceeds its maximum depth.");
+                    throw std::length_error(
+                        "Behavior tree exceeds its maximum depth.");
                 if (visited.contains(id)) return;
                 if (!visiting.insert(id).second)
                     throw std::invalid_argument("Behavior tree contains a cycle.");
-                const Node& node = RequireNode(id);
-                for (const auto child : node.Children) self(self, child, depth + 1u);
+                for (const auto child : RequireNode(id).Children)
+                    self(self, child, depth + 1u);
                 visiting.erase(id);
                 visited.insert(id);
             };
@@ -308,10 +322,12 @@ export namespace kairo::ai::gameplay
         }
 
         [[nodiscard]] BehaviorStatus TickNode(BehaviorNodeID id,
-            Blackboard& blackboard, const BehaviorContext& context, std::size_t depth)
+            Blackboard& blackboard, const BehaviorContext& context,
+            std::size_t depth)
         {
             if (depth > MaximumDepth)
-                throw std::length_error("Behavior execution exceeded its maximum depth.");
+                throw std::length_error(
+                    "Behavior execution exceeded its maximum depth.");
             const Node& node = RequireNode(id);
             switch (node.Kind)
             {
@@ -320,15 +336,16 @@ export namespace kairo::ai::gameplay
 
                 case NodeKind::Condition:
                 {
-                    const BehaviorStatus result = node.Leaf(blackboard, context);
+                    const auto result = node.Leaf(blackboard, context);
                     if (result == BehaviorStatus::Running)
-                        throw std::logic_error("Behavior conditions cannot return Running.");
+                        throw std::logic_error(
+                            "Behavior conditions cannot return Running.");
                     return result;
                 }
 
                 case NodeKind::Inverter:
                 {
-                    const BehaviorStatus result = TickNode(node.Children.front(), blackboard,
+                    const auto result = TickNode(node.Children.front(), blackboard,
                         context, depth + 1u);
                     if (result == BehaviorStatus::Running) return result;
                     return result == BehaviorStatus::Success
@@ -337,7 +354,7 @@ export namespace kairo::ai::gameplay
 
                 case NodeKind::Succeeder:
                 {
-                    const BehaviorStatus result = TickNode(node.Children.front(), blackboard,
+                    const auto result = TickNode(node.Children.front(), blackboard,
                         context, depth + 1u);
                     return result == BehaviorStatus::Running
                         ? BehaviorStatus::Running : BehaviorStatus::Success;
@@ -345,11 +362,11 @@ export namespace kairo::ai::gameplay
 
                 case NodeKind::Sequence:
                 {
-                    std::size_t& cursor = m_Cursors[id];
+                    auto& cursor = m_Cursors[id];
                     while (cursor < node.Children.size())
                     {
-                        const BehaviorStatus result = TickNode(node.Children[cursor],
-                            blackboard, context, depth + 1u);
+                        const auto result = TickNode(node.Children[cursor], blackboard,
+                            context, depth + 1u);
                         if (result == BehaviorStatus::Running) return result;
                         if (result == BehaviorStatus::Failure)
                         {
@@ -364,11 +381,11 @@ export namespace kairo::ai::gameplay
 
                 case NodeKind::Selector:
                 {
-                    std::size_t& cursor = m_Cursors[id];
+                    auto& cursor = m_Cursors[id];
                     while (cursor < node.Children.size())
                     {
-                        const BehaviorStatus result = TickNode(node.Children[cursor],
-                            blackboard, context, depth + 1u);
+                        const auto result = TickNode(node.Children[cursor], blackboard,
+                            context, depth + 1u);
                         if (result == BehaviorStatus::Running) return result;
                         if (result == BehaviorStatus::Success)
                         {
@@ -392,9 +409,8 @@ export namespace kairo::ai::gameplay
         BehaviorLeaf Execute;
     };
 
-    /// Utility decisions complement behavior trees for choices such as flee vs.
-    /// attack vs. seek cover. Scoring remains deterministic and bounded; ties
-    /// are resolved by registration order instead of container iteration order.
+    /// Utility scoring complements behavior trees for choices such as attack,
+    /// flee, investigate, or seek cover. Ties resolve by registration order.
     class UtilitySelector final
     {
     public:
@@ -407,27 +423,15 @@ export namespace kairo::ai::gameplay
                 throw std::length_error("Utility selector exceeds its option budget.");
             if (std::ranges::any_of(m_Options, [&](const UtilityOption& existing)
                 { return existing.Name == option.Name; }))
-                throw std::invalid_argument("Utility option name is already registered.");
+                throw std::invalid_argument(
+                    "Utility option name is already registered.");
             m_Options.push_back(std::move(option));
         }
 
         [[nodiscard]] std::optional<std::string_view> Select(
             const Blackboard& blackboard, BehaviorContext context) const
         {
-            context.Validate();
-            std::optional<std::size_t> best;
-            double bestScore = -std::numeric_limits<double>::infinity();
-            for (std::size_t index = 0u; index < m_Options.size(); ++index)
-            {
-                const double score = m_Options[index].Score(blackboard, context);
-                if (!std::isfinite(score))
-                    throw std::runtime_error("Utility option returned a non-finite score.");
-                if (!best.has_value() || score > bestScore)
-                {
-                    best = index;
-                    bestScore = score;
-                }
-            }
+            const auto best = BestIndex(blackboard, context);
             if (!best.has_value()) return std::nullopt;
             return m_Options[*best].Name;
         }
@@ -435,28 +439,36 @@ export namespace kairo::ai::gameplay
         [[nodiscard]] BehaviorStatus TickBest(Blackboard& blackboard,
             BehaviorContext context) const
         {
-            context.Validate();
-            if (m_Options.empty()) return BehaviorStatus::Failure;
-            std::size_t best = 0u;
-            double bestScore = -std::numeric_limits<double>::infinity();
-            for (std::size_t index = 0u; index < m_Options.size(); ++index)
-            {
-                const double score = m_Options[index].Score(blackboard, context);
-                if (!std::isfinite(score))
-                    throw std::runtime_error("Utility option returned a non-finite score.");
-                if (index == 0u || score > bestScore)
-                {
-                    best = index;
-                    bestScore = score;
-                }
-            }
-            return m_Options[best].Execute(blackboard, context);
+            const auto best = BestIndex(blackboard, context);
+            if (!best.has_value()) return BehaviorStatus::Failure;
+            return m_Options[*best].Execute(blackboard, context);
         }
 
         [[nodiscard]] std::size_t Size() const noexcept { return m_Options.size(); }
 
     private:
         std::vector<UtilityOption> m_Options;
+
+        [[nodiscard]] std::optional<std::size_t> BestIndex(
+            const Blackboard& blackboard, BehaviorContext context) const
+        {
+            context.Validate();
+            std::optional<std::size_t> best;
+            std::optional<double> bestScore;
+            for (std::size_t index = 0u; index < m_Options.size(); ++index)
+            {
+                const double score = m_Options[index].Score(blackboard, context);
+                if (!std::isfinite(score))
+                    throw std::runtime_error(
+                        "Utility option returned a non-finite score.");
+                if (!bestScore.has_value() || score > *bestScore)
+                {
+                    best = index;
+                    bestScore = score;
+                }
+            }
+            return best;
+        }
     };
 
     enum class StimulusKind : std::uint8_t
@@ -478,15 +490,15 @@ export namespace kairo::ai::gameplay
 
         void Validate() const
         {
-            if (!Position.IsFinite() || !std::isfinite(Strength) || Strength < 0.0 ||
-                !std::isfinite(TimeSeconds))
-                throw std::invalid_argument("Gameplay perception stimulus is invalid.");
+            if (!Position.IsFinite() || !std::isfinite(Strength) ||
+                Strength < 0.0 || !std::isfinite(TimeSeconds))
+                throw std::invalid_argument(
+                    "Gameplay perception stimulus is invalid.");
         }
     };
 
-    /// Bounded short-term memory for NPC sensory systems. Entries are retained
-    /// in arrival order and expire by age so an open-world simulation cannot
-    /// accumulate unbounded perception history.
+    /// Bounded short-term sensory memory. Strongest() applies linear recency
+    /// decay, giving cognition a stable way to prefer recent/high-salience input.
     class PerceptionMemory final
     {
     public:
@@ -495,9 +507,11 @@ export namespace kairo::ai::gameplay
             : m_Capacity(capacity), m_MaximumAge(maximumAgeSeconds)
         {
             if (capacity == 0u || capacity > 16'384u)
-                throw std::invalid_argument("Perception memory capacity is invalid.");
+                throw std::invalid_argument(
+                    "Perception memory capacity is invalid.");
             if (!std::isfinite(maximumAgeSeconds) || maximumAgeSeconds <= 0.0)
-                throw std::invalid_argument("Perception memory age must be finite and positive.");
+                throw std::invalid_argument(
+                    "Perception memory age must be finite and positive.");
         }
 
         void Remember(Stimulus stimulus)
@@ -521,15 +535,17 @@ export namespace kairo::ai::gameplay
         {
             ValidateNow(nowSeconds);
             std::optional<Stimulus> result;
-            double bestScore = -1.0;
+            std::optional<double> bestScore;
             for (const auto& stimulus : m_Entries)
             {
                 const double age = nowSeconds - stimulus.TimeSeconds;
-                if (age < 0.0 || age > m_MaximumAge || stimulus.Kind != kind) continue;
-                const double recency = 1.0 - age / m_MaximumAge;
-                const double score = stimulus.Strength * recency;
-                if (!result.has_value() || score > bestScore ||
-                    (score == bestScore && stimulus.TimeSeconds > result->TimeSeconds))
+                if (age < 0.0 || age > m_MaximumAge || stimulus.Kind != kind)
+                    continue;
+                const double score = stimulus.Strength *
+                    (1.0 - age / m_MaximumAge);
+                if (!bestScore.has_value() || score > *bestScore ||
+                    (score == *bestScore &&
+                        stimulus.TimeSeconds > result->TimeSeconds))
                 {
                     result = stimulus;
                     bestScore = score;
@@ -551,7 +567,8 @@ export namespace kairo::ai::gameplay
         static void ValidateNow(double nowSeconds)
         {
             if (!std::isfinite(nowSeconds))
-                throw std::invalid_argument("Perception query time must be finite.");
+                throw std::invalid_argument(
+                    "Perception query time must be finite.");
         }
     };
 }
