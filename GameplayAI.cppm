@@ -5,14 +5,13 @@ module;
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <limits>
 #include <map>
 #include <optional>
-#include <queue>
 #include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -33,221 +32,31 @@ export namespace kairo::ai::gameplay
         }
     };
 
-    [[nodiscard]] inline double Distance(WorldPosition a, WorldPosition b) noexcept
-    {
-        const double x = a.X - b.X;
-        const double y = a.Y - b.Y;
-        const double z = a.Z - b.Z;
-        return std::sqrt(x * x + y * y + z * z);
-    }
-
-    using NavNodeID = std::uint32_t;
-    inline constexpr NavNodeID InvalidNavNode = 0u;
-
-    struct NavigationPath final
-    {
-        std::vector<NavNodeID> Nodes;
-        double Cost = 0.0;
-        std::size_t VisitedNodes = 0u;
-
-        [[nodiscard]] bool Found() const noexcept { return !Nodes.empty(); }
-    };
-
-    struct NavigationQuery final
-    {
-        std::size_t MaximumVisitedNodes = 65'536u;
-        double HeuristicWeight = 1.0;
-
-        void Validate() const
-        {
-            if (MaximumVisitedNodes == 0u)
-                throw std::invalid_argument("Navigation query must permit at least one visited node.");
-            if (!std::isfinite(HeuristicWeight) || HeuristicWeight < 0.0 || HeuristicWeight > 4.0)
-                throw std::invalid_argument("Navigation heuristic weight must be finite and in [0, 4].");
-        }
-    };
-
-    /// Deterministic sparse navigation graph used by gameplay agents. The graph
-    /// deliberately owns only topology and traversal cost; navmesh baking,
-    /// streaming, crowd avoidance, and animation remain independent adapters.
-    class NavigationGraph final
-    {
-        struct Edge final
-        {
-            NavNodeID To = InvalidNavNode;
-            double Cost = 0.0;
-        };
-
-        struct Node final
-        {
-            WorldPosition Position{};
-            bool Enabled = true;
-            std::vector<Edge> Edges;
-        };
-
-    public:
-        void AddNode(NavNodeID id, WorldPosition position)
-        {
-            if (id == InvalidNavNode)
-                throw std::invalid_argument("Navigation node zero is reserved as invalid.");
-            if (!position.IsFinite())
-                throw std::invalid_argument("Navigation node position must be finite.");
-            if (!m_Nodes.emplace(id, Node{ position }).second)
-                throw std::invalid_argument("Navigation node ID is already registered.");
-        }
-
-        void SetEnabled(NavNodeID id, bool enabled)
-        {
-            RequireNode(id).Enabled = enabled;
-        }
-
-        [[nodiscard]] bool IsEnabled(NavNodeID id) const
-        {
-            return RequireNode(id).Enabled;
-        }
-
-        [[nodiscard]] WorldPosition Position(NavNodeID id) const
-        {
-            return RequireNode(id).Position;
-        }
-
-        void AddDirectedEdge(NavNodeID from, NavNodeID to,
-            std::optional<double> traversalCost = std::nullopt)
-        {
-            if (from == to)
-                throw std::invalid_argument("Navigation self-edges are not permitted.");
-            Node& source = RequireNode(from);
-            const Node& destination = RequireNode(to);
-            const double cost = traversalCost.value_or(
-                Distance(source.Position, destination.Position));
-            if (!std::isfinite(cost) || cost <= 0.0)
-                throw std::invalid_argument("Navigation edge cost must be finite and positive.");
-            if (std::ranges::any_of(source.Edges,
-                [to](const Edge& edge) { return edge.To == to; }))
-                throw std::invalid_argument("Navigation edge is already registered.");
-            source.Edges.push_back({ to, cost });
-            std::ranges::sort(source.Edges, {}, &Edge::To);
-        }
-
-        void AddBidirectionalEdge(NavNodeID a, NavNodeID b,
-            std::optional<double> traversalCost = std::nullopt)
-        {
-            AddDirectedEdge(a, b, traversalCost);
-            try { AddDirectedEdge(b, a, traversalCost); }
-            catch (...)
-            {
-                auto& edges = RequireNode(a).Edges;
-                std::erase_if(edges, [b](const Edge& edge) { return edge.To == b; });
-                throw;
-            }
-        }
-
-        [[nodiscard]] std::size_t NodeCount() const noexcept { return m_Nodes.size(); }
-
-        [[nodiscard]] NavigationPath FindPath(NavNodeID start, NavNodeID goal,
-            NavigationQuery query = {}) const
-        {
-            query.Validate();
-            const Node& startNode = RequireNode(start);
-            const Node& goalNode = RequireNode(goal);
-            if (!startNode.Enabled || !goalNode.Enabled) return {};
-            if (start == goal) return { { start }, 0.0, 1u };
-
-            struct OpenEntry final
-            {
-                NavNodeID Node = InvalidNavNode;
-                double G = 0.0;
-                double F = 0.0;
-            };
-            struct Worse final
-            {
-                bool operator()(const OpenEntry& a, const OpenEntry& b) const noexcept
-                {
-                    if (a.F != b.F) return a.F > b.F;
-                    if (a.G != b.G) return a.G > b.G;
-                    return a.Node > b.Node;
-                }
-            };
-
-            std::priority_queue<OpenEntry, std::vector<OpenEntry>, Worse> open;
-            std::map<NavNodeID, double> bestCost;
-            std::map<NavNodeID, NavNodeID> parent;
-            std::set<NavNodeID> closed;
-            bestCost[start] = 0.0;
-            open.push({ start, 0.0,
-                query.HeuristicWeight * Distance(startNode.Position, goalNode.Position) });
-
-            while (!open.empty())
-            {
-                const OpenEntry current = open.top();
-                open.pop();
-                const auto best = bestCost.find(current.Node);
-                if (best == bestCost.end() || current.G > best->second) continue;
-                if (closed.contains(current.Node)) continue;
-                closed.insert(current.Node);
-                if (closed.size() > query.MaximumVisitedNodes)
-                    throw std::runtime_error("Navigation query exceeded its visited-node budget.");
-
-                if (current.Node == goal)
-                {
-                    NavigationPath result;
-                    result.Cost = current.G;
-                    result.VisitedNodes = closed.size();
-                    for (NavNodeID cursor = goal;; cursor = parent.at(cursor))
-                    {
-                        result.Nodes.push_back(cursor);
-                        if (cursor == start) break;
-                    }
-                    std::ranges::reverse(result.Nodes);
-                    return result;
-                }
-
-                const Node& node = RequireNode(current.Node);
-                for (const Edge& edge : node.Edges)
-                {
-                    const Node& next = RequireNode(edge.To);
-                    if (!next.Enabled || closed.contains(edge.To)) continue;
-                    const double candidate = current.G + edge.Cost;
-                    const auto known = bestCost.find(edge.To);
-                    if (known != bestCost.end() && candidate >= known->second) continue;
-                    bestCost[edge.To] = candidate;
-                    parent[edge.To] = current.Node;
-                    const double heuristic = Distance(next.Position, goalNode.Position);
-                    open.push({ edge.To, candidate,
-                        candidate + query.HeuristicWeight * heuristic });
-                }
-            }
-            return { {}, 0.0, closed.size() };
-        }
-
-    private:
-        std::map<NavNodeID, Node> m_Nodes;
-
-        [[nodiscard]] Node& RequireNode(NavNodeID id)
-        {
-            const auto found = m_Nodes.find(id);
-            if (found == m_Nodes.end())
-                throw std::out_of_range("Navigation node does not exist.");
-            return found->second;
-        }
-
-        [[nodiscard]] const Node& RequireNode(NavNodeID id) const
-        {
-            const auto found = m_Nodes.find(id);
-            if (found == m_Nodes.end())
-                throw std::out_of_range("Navigation node does not exist.");
-            return found->second;
-        }
-    };
-
     struct EntityReference final
     {
         std::uint64_t Value = 0u;
         friend constexpr bool operator==(const EntityReference&, const EntityReference&) noexcept = default;
     };
 
+    /// The gameplay AI layer expresses movement intent but deliberately does not
+    /// own graph search. KairoSpatial remains the single navigation/A* source of
+    /// truth and a host bridge translates this request into a spatial query.
+    struct NavigationIntent final
+    {
+        WorldPosition Destination{};
+        double AcceptanceRadius = 0.25;
+        bool AllowPartialPath = false;
+
+        void Validate() const
+        {
+            if (!Destination.IsFinite() || !std::isfinite(AcceptanceRadius) ||
+                AcceptanceRadius < 0.0)
+                throw std::invalid_argument("Gameplay navigation intent is invalid.");
+        }
+    };
+
     using BlackboardValue = std::variant<bool, std::int64_t, double,
-        std::string, WorldPosition, EntityReference>;
+        std::string, WorldPosition, EntityReference, NavigationIntent>;
 
     class Blackboard final
     {
@@ -261,7 +70,7 @@ export namespace kairo::ai::gameplay
 
         [[nodiscard]] bool Contains(std::string_view key) const
         {
-            return m_Values.contains(std::string(key));
+            return m_Values.contains(key);
         }
 
         bool Remove(std::string_view key)
@@ -272,10 +81,22 @@ export namespace kairo::ai::gameplay
         template<typename T>
         [[nodiscard]] const T& Get(std::string_view key) const
         {
-            const auto found = m_Values.find(std::string(key));
+            const auto found = m_Values.find(key);
             if (found == m_Values.end())
                 throw std::out_of_range("Gameplay blackboard key does not exist.");
-            const auto value = std::get_if<T>(&found->second);
+            const auto* value = std::get_if<T>(&found->second);
+            if (value == nullptr)
+                throw std::invalid_argument("Gameplay blackboard value has a different type.");
+            return *value;
+        }
+
+        template<typename T>
+        [[nodiscard]] T& Get(std::string_view key)
+        {
+            const auto found = m_Values.find(key);
+            if (found == m_Values.end())
+                throw std::out_of_range("Gameplay blackboard key does not exist.");
+            auto* value = std::get_if<T>(&found->second);
             if (value == nullptr)
                 throw std::invalid_argument("Gameplay blackboard value has a different type.");
             return *value;
@@ -318,6 +139,10 @@ export namespace kairo::ai::gameplay
                     if (!entry.IsFinite())
                         throw std::invalid_argument("Gameplay blackboard position must be finite.");
                 }
+                else if constexpr (std::is_same_v<T, NavigationIntent>)
+                {
+                    entry.Validate();
+                }
             }, value);
         }
     };
@@ -346,12 +171,21 @@ export namespace kairo::ai::gameplay
     inline constexpr BehaviorNodeID InvalidBehaviorNode = 0u;
     using BehaviorLeaf = std::function<BehaviorStatus(Blackboard&, const BehaviorContext&)>;
 
-    /// Stateful deterministic behavior tree. Sequence and selector cursors are
-    /// retained while children return Running, so long-lived actions do not
-    /// restart every frame. Reset() explicitly cancels composite progress.
+    /// Stateful deterministic behavior tree. Composite cursors persist while a
+    /// descendant reports Running, so a multi-frame action resumes rather than
+    /// restarting at the beginning of the tree every frame.
     class BehaviorTree final
     {
-        enum class NodeKind : std::uint8_t { Action, Condition, Sequence, Selector, Inverter };
+        enum class NodeKind : std::uint8_t
+        {
+            Action,
+            Condition,
+            Sequence,
+            Selector,
+            Inverter,
+            Succeeder
+        };
+
         struct Node final
         {
             NodeKind Kind = NodeKind::Action;
@@ -388,6 +222,12 @@ export namespace kairo::ai::gameplay
         {
             ValidateChildren({ child }, true);
             return AddNode({ NodeKind::Inverter, {}, { child } });
+        }
+
+        [[nodiscard]] BehaviorNodeID AddSucceeder(BehaviorNodeID child)
+        {
+            ValidateChildren({ child }, true);
+            return AddNode({ NodeKind::Succeeder, {}, { child } });
         }
 
         void SetRoot(BehaviorNodeID root)
@@ -451,7 +291,8 @@ export namespace kairo::ai::gameplay
         {
             std::set<BehaviorNodeID> visiting;
             std::set<BehaviorNodeID> visited;
-            const auto visit = [&](const auto& self, BehaviorNodeID id, std::size_t depth) -> void
+            const auto visit = [&](const auto& self, BehaviorNodeID id,
+                std::size_t depth) -> void
             {
                 if (depth > MaximumDepth)
                     throw std::length_error("Behavior tree exceeds its maximum depth.");
@@ -476,6 +317,7 @@ export namespace kairo::ai::gameplay
             {
                 case NodeKind::Action:
                     return node.Leaf(blackboard, context);
+
                 case NodeKind::Condition:
                 {
                     const BehaviorStatus result = node.Leaf(blackboard, context);
@@ -483,6 +325,7 @@ export namespace kairo::ai::gameplay
                         throw std::logic_error("Behavior conditions cannot return Running.");
                     return result;
                 }
+
                 case NodeKind::Inverter:
                 {
                     const BehaviorStatus result = TickNode(node.Children.front(), blackboard,
@@ -491,6 +334,15 @@ export namespace kairo::ai::gameplay
                     return result == BehaviorStatus::Success
                         ? BehaviorStatus::Failure : BehaviorStatus::Success;
                 }
+
+                case NodeKind::Succeeder:
+                {
+                    const BehaviorStatus result = TickNode(node.Children.front(), blackboard,
+                        context, depth + 1u);
+                    return result == BehaviorStatus::Running
+                        ? BehaviorStatus::Running : BehaviorStatus::Success;
+                }
+
                 case NodeKind::Sequence:
                 {
                     std::size_t& cursor = m_Cursors[id];
@@ -509,6 +361,7 @@ export namespace kairo::ai::gameplay
                     cursor = 0u;
                     return BehaviorStatus::Success;
                 }
+
                 case NodeKind::Selector:
                 {
                     std::size_t& cursor = m_Cursors[id];
@@ -530,6 +383,80 @@ export namespace kairo::ai::gameplay
             }
             throw std::logic_error("Behavior node kind is invalid.");
         }
+    };
+
+    struct UtilityOption final
+    {
+        std::string Name;
+        std::function<double(const Blackboard&, const BehaviorContext&)> Score;
+        BehaviorLeaf Execute;
+    };
+
+    /// Utility decisions complement behavior trees for choices such as flee vs.
+    /// attack vs. seek cover. Scoring remains deterministic and bounded; ties
+    /// are resolved by registration order instead of container iteration order.
+    class UtilitySelector final
+    {
+    public:
+        void Add(UtilityOption option)
+        {
+            if (option.Name.empty() || option.Name.size() > 128u ||
+                !option.Score || !option.Execute)
+                throw std::invalid_argument("Utility option is incomplete.");
+            if (m_Options.size() >= 256u)
+                throw std::length_error("Utility selector exceeds its option budget.");
+            if (std::ranges::any_of(m_Options, [&](const UtilityOption& existing)
+                { return existing.Name == option.Name; }))
+                throw std::invalid_argument("Utility option name is already registered.");
+            m_Options.push_back(std::move(option));
+        }
+
+        [[nodiscard]] std::optional<std::string_view> Select(
+            const Blackboard& blackboard, BehaviorContext context) const
+        {
+            context.Validate();
+            std::optional<std::size_t> best;
+            double bestScore = -std::numeric_limits<double>::infinity();
+            for (std::size_t index = 0u; index < m_Options.size(); ++index)
+            {
+                const double score = m_Options[index].Score(blackboard, context);
+                if (!std::isfinite(score))
+                    throw std::runtime_error("Utility option returned a non-finite score.");
+                if (!best.has_value() || score > bestScore)
+                {
+                    best = index;
+                    bestScore = score;
+                }
+            }
+            if (!best.has_value()) return std::nullopt;
+            return m_Options[*best].Name;
+        }
+
+        [[nodiscard]] BehaviorStatus TickBest(Blackboard& blackboard,
+            BehaviorContext context) const
+        {
+            context.Validate();
+            if (m_Options.empty()) return BehaviorStatus::Failure;
+            std::size_t best = 0u;
+            double bestScore = -std::numeric_limits<double>::infinity();
+            for (std::size_t index = 0u; index < m_Options.size(); ++index)
+            {
+                const double score = m_Options[index].Score(blackboard, context);
+                if (!std::isfinite(score))
+                    throw std::runtime_error("Utility option returned a non-finite score.");
+                if (index == 0u || score > bestScore)
+                {
+                    best = index;
+                    bestScore = score;
+                }
+            }
+            return m_Options[best].Execute(blackboard, context);
+        }
+
+        [[nodiscard]] std::size_t Size() const noexcept { return m_Options.size(); }
+
+    private:
+        std::vector<UtilityOption> m_Options;
     };
 
     enum class StimulusKind : std::uint8_t
@@ -557,9 +484,9 @@ export namespace kairo::ai::gameplay
         }
     };
 
-    /// Bounded short-term perception memory suitable for NPC sensory systems.
-    /// Entries are ordered by arrival and pruned by age; stronger recent events
-    /// can be queried without retaining unbounded world history.
+    /// Bounded short-term memory for NPC sensory systems. Entries are retained
+    /// in arrival order and expire by age so an open-world simulation cannot
+    /// accumulate unbounded perception history.
     class PerceptionMemory final
     {
     public:
