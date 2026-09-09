@@ -1,0 +1,86 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu Clang
+            os: ubuntu-latest
+            platform: linux
+          - name: macOS Clang
+            os: macos-latest
+            platform: macos
+          - name: Windows MSVC
+            os: windows-2022
+            platform: windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux toolchain
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang ninja-build
+          echo "CXX=$(command -v clang++)" >> "$GITHUB_ENV"
+
+      - name: Install macOS toolchain
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          brew update
+          brew install cmake ninja llvm
+          echo "CXX=$(brew --prefix llvm)/bin/clang++" >> "$GITHUB_ENV"
+
+      - name: Initialize MSVC
+        if: matrix.platform == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure Unix
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: cmake -S . -B build -G Ninja -DCMAKE_CXX_COMPILER="$CXX" -DKAIRO_AI_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Configure Windows
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DKAIRO_AI_BUILD_TESTS=ON
+
+      - name: Build Unix
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: cmake --build build --parallel 2
+
+      - name: Build Windows
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: cmake --build build --config Debug --parallel 2
+
+      - name: Test Unix
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Test Windows
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ctest --test-dir build -C Debug --output-on-failure
