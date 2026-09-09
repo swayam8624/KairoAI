@@ -5,3 +5,4 @@ export import Kairo.AI.Provider;
 export import Kairo.AI.ToolPolicy;
 export import Kairo.AI.MockProvider;
 export import Kairo.AI.DeviceAgent;
+export import Kairo.AI.Gameplay;
