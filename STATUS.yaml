@@ -2,10 +2,11 @@ schema: kairo.repo-status.v1
 repository: KairoAI
 wave: E
 scope: provider-device-agent-v1
-completion_score: 95
+completion_score: unverified
 target_score: 95
+claim_state: retracted_until_acceptance
 score_policy: frozen_scope_source_completeness
-source_gate: complete
+source_gate: pending_exact_head_acceptance
 exact_head_execution: pending_external_runner
 verification_gate: cmake-build-core-cloud-tests
 research_track: R5-support
