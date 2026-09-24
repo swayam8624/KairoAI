@@ -1,0 +1,13 @@
+schema: kairo.research-track.v1
+track: R5
+title: Reversible AI-native authoring
+state: hypothesis
+role: typed_plan_tool_receipt_and_verification
+problem: AI authoring actions are unsafe when tool intent, side effects and verification are opaque.
+hypothesis: Typed plans, explicit approvals, bounded tool contracts and machine-readable receipts can reduce unsafe edits while retaining useful task throughput.
+baselines: [direct_ai_action, ai_with_undo_only, ai_with_preview_only, manual_authoring]
+workloads: [scene_edit_tasks, material_edit_tasks, asset_repair, gameplay_parameter_edits]
+metrics: [successful_task_rate, unsafe_change_rate, receipt_completeness, rollback_success_rate, correction_count, completion_time]
+ablations: [no_typed_plan, no_receipt, no_verification, no_atomic_undo]
+failure_cases: [ambiguous_intent, stale_state, multi_asset_edit, partial_tool_failure]
+falsification: Reject if typed reversible execution does not improve unsafe-change or recovery outcomes versus direct AI action without unacceptable completion-time cost.
