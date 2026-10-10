@@ -103,6 +103,42 @@ TEST_CASE("OpenAI-compatible SSE refuses an over-limit unterminated event", "[Ka
     REQUIRE_THROWS_AS(provider.Execute(RequestWithTool(), {}, {}), std::length_error);
 }
 
+TEST_CASE("OpenAI-compatible local HTTP origin must be exact loopback", "[KairoAI][Cloud][Security]")
+{
+    auto transport = std::make_shared<FakeTransport>();
+    const auto valid = {
+        "http://localhost:11434/v1/chat/completions",
+        "http://127.0.0.1:8080/",
+        "http://[::1]:5500/api",
+        "https://example.test/v1/chat/completions"
+    };
+    for (const char* endpoint : valid)
+    {
+        CHECK_NOTHROW(OpenAICompatibleProvider(
+            { .Endpoint = endpoint, .APIKey = "secret" }, transport));
+    }
+
+    const auto spoofed = {
+        "http://localhost.attacker.example/steal",
+        "http://localhost@attacker.example/steal",
+        "http://127.0.0.1.evil.example/steal",
+        "http://localhost:443@attacker.example/",
+        "http://[::1]@attacker.example/",
+        "http://localhost:99999/v1/chat",
+        "http://localhost:0/v1/chat",
+        "http://localhost:any/v1/chat",
+        "http://localhost:/v1/chat",
+        "http://localhostevil/v1/chat",
+        "http://127.0.0.1.2:9000/"
+    };
+    for (const char* endpoint : spoofed)
+    {
+        CHECK_THROWS_AS(OpenAICompatibleProvider(
+            { .Endpoint = endpoint, .APIKey = "secret" }, transport),
+            std::invalid_argument);
+    }
+}
+
 TEST_CASE("OpenAI-compatible provider assembles fragmented tool calls once", "[KairoAI][Cloud][Tools]")
 {
     auto transport = std::make_shared<FakeTransport>();
