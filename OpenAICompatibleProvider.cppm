@@ -75,20 +75,35 @@ export namespace kairo::ai
             template<class Consumer>
             void Feed(std::string_view chunk, Consumer&& consume)
             {
-                if (m_Buffer.size() + chunk.size() > m_MaximumBytes)
-                    throw std::length_error("OpenAI-compatible SSE event exceeds its safety limit.");
-                m_Buffer.append(chunk);
-                for (;;)
+                // Transport chunking is not an SSE message boundary: one
+                // HTTP callback can contain thousands of small valid events.
+                // Applying the per-event safety limit to the WHOLE chunk
+                // rejected perfectly valid streamed responses. Assemble one
+                // event at a time, requiring only bounded event storage.
+                for (const char character : chunk)
                 {
-                    const std::size_t lf = m_Buffer.find("\n\n");
-                    const std::size_t crlf = m_Buffer.find("\r\n\r\n");
-                    std::size_t end = std::min(lf, crlf);
-                    if (lf == std::string::npos) end = crlf;
-                    if (crlf == std::string::npos) end = lf;
-                    if (end == std::string::npos) break;
-                    const std::size_t separator = end == crlf ? 4u : 2u;
-                    ConsumeEvent(std::string_view(m_Buffer).substr(0u, end), consume);
-                    m_Buffer.erase(0u, end + separator);
+                    m_Buffer.push_back(character);
+                    const bool crlf = m_Buffer.ends_with("\r\n\r\n");
+                    const bool lf = !crlf && m_Buffer.ends_with("\n\n");
+                    if (crlf || lf)
+                    {
+                        const std::size_t separator = crlf ? 4u : 2u;
+                        const std::size_t eventBytes = m_Buffer.size() - separator;
+                        if (eventBytes > m_MaximumBytes)
+                            throw std::length_error(
+                                "OpenAI-compatible SSE event exceeds its safety limit.");
+                        ConsumeEvent(std::string_view(m_Buffer.data(), eventBytes), consume);
+                        m_Buffer.clear();
+                    }
+                    else if (m_Buffer.size() > m_MaximumBytes &&
+                        m_Buffer.size() - m_MaximumBytes > 4u)
+                    {
+                        // Permit only the possible trailing delimiter bytes
+                        // beyond the payload limit. The upper bound holds
+                        // even for a malicious stream with no terminator.
+                        throw std::length_error(
+                            "OpenAI-compatible SSE event exceeds its safety limit.");
+                    }
                 }
             }
 
