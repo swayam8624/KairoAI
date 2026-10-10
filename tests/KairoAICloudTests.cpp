@@ -72,6 +72,37 @@ TEST_CASE("OpenAI-compatible provider decodes fragmented text and usage streams"
     CHECK(transport->SeenTimeoutMilliseconds == 120'000u);
 }
 
+TEST_CASE("OpenAI-compatible SSE limit applies to each event, not transport chunk", "[KairoAI][Cloud][SSE]")
+{
+    auto transport = std::make_shared<FakeTransport>();
+    const std::string oneEvent =
+        "data: {\"choices\":[{\"delta\":{\"content\":\"A\"}}]}\n\n";
+    // Every event is below 64 bytes; the concatenated transport chunk is not.
+    REQUIRE(oneEvent.size() < 64u);
+    transport->Chunks = {
+        oneEvent + oneEvent + oneEvent + oneEvent + "data: [DONE]\n\n"
+    };
+    OpenAICompatibleProvider provider({
+        .Endpoint = "https://example.test/chat",
+        .APIKey = "secret",
+        .MaximumEventBytes = 64u
+    }, transport);
+    const Response response = provider.Execute(RequestWithTool(), {}, {});
+    REQUIRE(response.Text == "AAAA");
+}
+
+TEST_CASE("OpenAI-compatible SSE refuses an over-limit unterminated event", "[KairoAI][Cloud][SSE]")
+{
+    auto transport = std::make_shared<FakeTransport>();
+    transport->Chunks = { std::string(120u, 'x') };
+    OpenAICompatibleProvider provider({
+        .Endpoint = "https://example.test/chat",
+        .APIKey = "secret",
+        .MaximumEventBytes = 32u
+    }, transport);
+    REQUIRE_THROWS_AS(provider.Execute(RequestWithTool(), {}, {}), std::length_error);
+}
+
 TEST_CASE("OpenAI-compatible provider assembles fragmented tool calls once", "[KairoAI][Cloud][Tools]")
 {
     auto transport = std::make_shared<FakeTransport>();
