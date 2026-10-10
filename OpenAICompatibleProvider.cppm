@@ -62,8 +62,58 @@ export namespace kairo::ai
 
         [[nodiscard]] inline bool IsSecureEndpoint(std::string_view endpoint) noexcept
         {
-            return endpoint.starts_with("https://") || endpoint.starts_with("http://127.0.0.1") ||
-                endpoint.starts_with("http://localhost");
+            if (endpoint.starts_with("https://"))
+                return endpoint.size() > 8u && endpoint[8u] != '/';
+            if (!endpoint.starts_with("http://")) return false;
+
+            // HTTP is permitted only for an *exact* loopback authority.
+            // Prefix matching accepted localhost.attacker.example, a userinfo
+            // origin such as localhost@attacker.example, and 127.0.0.1.evil.
+            // Any of these could receive the user's Authorization bearer key.
+            std::string_view remainder = endpoint.substr(7u);
+            const std::size_t delimiter = remainder.find_first_of("/?#");
+            const std::string_view authority = remainder.substr(0u, delimiter);
+            if (authority.empty() || authority.find('@') != std::string_view::npos)
+                return false;
+            std::string_view hostname = authority;
+            std::string_view port;
+            if (authority.starts_with("["))
+            {
+                const std::size_t close = authority.find(']');
+                if (close == std::string_view::npos) return false;
+                hostname = authority.substr(0u, close + 1u);
+                if (close + 1u < authority.size())
+                {
+                    if (authority[close + 1u] != ':') return false;
+                    port = authority.substr(close + 2u);
+                    if (port.empty()) return false;
+                }
+            }
+            else
+            {
+                const std::size_t colon = authority.find(':');
+                if (colon != std::string_view::npos)
+                {
+                    hostname = authority.substr(0u, colon);
+                    port = authority.substr(colon + 1u);
+                    if (port.empty()) return false;
+                }
+            }
+            if (hostname != "localhost" && hostname != "127.0.0.1" &&
+                hostname != "[::1]")
+                return false;
+            if (!port.empty())
+            {
+                std::uint32_t value = 0u;
+                for (char digit : port)
+                {
+                    if (digit < '0' || digit > '9') return false;
+                    value = value * 10u + static_cast<std::uint32_t>(digit - '0');
+                    if (value > 65535u) return false;
+                }
+                if (value == 0u) return false;
+            }
+            return true;
         }
 
         class SSEDecoder final
