@@ -1,5 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <limits>
+#include <stdexcept>
+
 import Kairo.AI.DeviceAgent;
 
 using namespace kairo::ai::device;
@@ -76,6 +79,51 @@ TEST_CASE("Device agent refuses weak, missing, mismatched, and unbound requests"
     weak.ActiveApplicationID = "com.adobe.Premiere";
     weak.Intent = IntentKind::SplitSelectedClip;
     CHECK(router.Propose(weak).Decision == ProposalDecision::IntentNotBound);
+}
+
+TEST_CASE("Device agent routes identical intents to the correct active application", "[KairoAI][DeviceAgent]")
+{
+    IntentRouter router;
+    router.Register(PremiereTrimBinding());
+    ActionBinding finalCut = PremiereTrimBinding();
+    finalCut.ApplicationID = "com.apple.FinalCutPro";
+    finalCut.ToolName = "finalcut.clip.trim";
+    router.Register(finalCut);
+
+    const IntentRequest request{
+        "com.apple.FinalCutPro", IntentKind::TrimSelectedClip,
+        { { EvidenceKind::Gesture, "gesture", 0.98f, 10u },
+          { EvidenceKind::ScreenState, "timeline", 0.99f, 11u },
+          { EvidenceKind::SelectionState, "clip", 0.97f, 12u } }
+    };
+    const auto proposal = router.Propose(request);
+    REQUIRE(proposal.ReadyForAuthorization());
+    REQUIRE(proposal.Call.has_value());
+    REQUIRE(proposal.Call->Name == "finalcut.clip.trim");
+    REQUIRE(proposal.Call->ID.find("com.apple.FinalCutPro") != std::string::npos);
+    CHECK(router.BindingCount() == 2u);
+
+    IntentRequest wrong = request;
+    wrong.ActiveApplicationID = "com.apple.finder";
+    CHECK(router.Propose(wrong).Decision == ProposalDecision::ApplicationMismatch);
+}
+
+TEST_CASE("Device agent rejects NaN confidence in bindings and observations", "[KairoAI][DeviceAgent]")
+{
+    IntentRouter router;
+    ActionBinding invalid = PremiereTrimBinding();
+    invalid.MinimumConfidence = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE_THROWS_AS(router.Register(invalid), std::invalid_argument);
+    router.Register(PremiereTrimBinding());
+
+    IntentRequest request{
+        "com.adobe.Premiere", IntentKind::TrimSelectedClip,
+        { { EvidenceKind::Gesture, "gesture", 0.98f, 10u },
+          { EvidenceKind::ScreenState, "timeline", 0.99f, 11u },
+          { EvidenceKind::SelectionState, "clip", 0.97f, 12u } }
+    };
+    request.EvidenceSet.front().Confidence = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE_THROWS_AS(router.Propose(request), std::invalid_argument);
 }
 
 TEST_CASE("Device agent joins only exact execution and verification records into replay", "[KairoAI][DeviceAgent]")
