@@ -108,8 +108,10 @@ export namespace kairo::ai
                 for (char digit : port)
                 {
                     if (digit < '0' || digit > '9') return false;
-                    value = value * 10u + static_cast<std::uint32_t>(digit - '0');
-                    if (value > 65535u) return false;
+                    const std::uint32_t unit =
+                        static_cast<std::uint32_t>(digit - '0');
+                    if (value > (65535u - unit) / 10u) return false;
+                    value = value * 10u + unit;
                 }
                 if (value == 0u) return false;
             }
