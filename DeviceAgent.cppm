@@ -1,6 +1,8 @@
 module;
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <cstdint>
 #include <optional>
 #include <set>
@@ -303,16 +305,28 @@ export namespace kairo::ai::device
         [[nodiscard]] ActionProposal Propose(const IntentRequest& request) const
         {
             ValidateRequest(request);
+            // The same intent is legitimately registered in multiple host
+            // applications. Match BOTH application identity and intent; taking
+            // the first intent alone incorrectly rejects the second app.
             const auto binding = std::find_if(m_Bindings.begin(), m_Bindings.end(),
                 [&request](const ActionBinding& candidate)
                 {
-                    return candidate.Intent == request.Intent;
+                    return candidate.Intent == request.Intent &&
+                        candidate.ApplicationID == request.ActiveApplicationID;
                 });
             if (binding == m_Bindings.end())
-                return { ProposalDecision::IntentNotBound, "No action is registered for this intent.", std::nullopt, std::nullopt, {} };
-            if (binding->ApplicationID != request.ActiveApplicationID)
-                return { ProposalDecision::ApplicationMismatch,
-                    "The active application does not match the registered action binding.", std::nullopt, std::nullopt, {} };
+            {
+                const bool intentKnown = std::any_of(m_Bindings.begin(), m_Bindings.end(),
+                    [&request](const ActionBinding& candidate)
+                    {
+                        return candidate.Intent == request.Intent;
+                    });
+                return { intentKnown ? ProposalDecision::ApplicationMismatch
+                                     : ProposalDecision::IntentNotBound,
+                    intentKnown ? "The active application does not match any binding for this intent."
+                                : "No action is registered for this intent.",
+                    std::nullopt, std::nullopt, {} };
+            }
 
             std::vector<std::string> evidenceIDs;
             for (const EvidenceKind required : binding->RequiredEvidence)
@@ -334,6 +348,9 @@ export namespace kairo::ai::device
                 evidenceIDs.push_back(evidence->ID);
             }
 
+            if (m_NextCallID == std::numeric_limits<std::uint64_t>::max())
+                throw std::overflow_error(
+                    "Device agent call ID counter is exhausted.");
             const std::string callID = "device." + binding->ApplicationID + "." + std::to_string(++m_NextCallID);
             return { ProposalDecision::Proposed, "Verified intent matched a registered application action.",
                 ToolCall{ callID, binding->ToolName, binding->Arguments }, binding->Contract,
@@ -350,7 +367,8 @@ export namespace kairo::ai::device
         {
             if (binding.ApplicationID.empty() || !IsToolName(binding.ToolName) || binding.Arguments.empty())
                 throw std::invalid_argument("Device-agent bindings require an application id, valid tool name, and canonical arguments.");
-            if (binding.RequiredEvidence.empty() || binding.MinimumConfidence <= 0.0f || binding.MinimumConfidence > 1.0f)
+            if (binding.RequiredEvidence.empty() || !std::isfinite(binding.MinimumConfidence) ||
+                binding.MinimumConfidence <= 0.0f || binding.MinimumConfidence > 1.0f)
                 throw std::invalid_argument("Device-agent bindings require evidence and a confidence threshold within (0, 1].");
             ValidateActionContract(binding.Contract);
         }
@@ -361,7 +379,8 @@ export namespace kairo::ai::device
                 throw std::invalid_argument("Device-agent requests require an active application and evidence.");
             for (const Evidence& evidence : request.EvidenceSet)
             {
-                if (evidence.ID.empty() || evidence.Confidence < 0.0f || evidence.Confidence > 1.0f)
+                if (evidence.ID.empty() || !std::isfinite(evidence.Confidence) ||
+                    evidence.Confidence < 0.0f || evidence.Confidence > 1.0f)
                     throw std::invalid_argument("Device-agent evidence requires an id and confidence within [0, 1].");
             }
         }
