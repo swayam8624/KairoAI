@@ -62,8 +62,60 @@ export namespace kairo::ai
 
         [[nodiscard]] inline bool IsSecureEndpoint(std::string_view endpoint) noexcept
         {
-            return endpoint.starts_with("https://") || endpoint.starts_with("http://127.0.0.1") ||
-                endpoint.starts_with("http://localhost");
+            if (endpoint.starts_with("https://"))
+                return endpoint.size() > 8u && endpoint[8u] != '/';
+            if (!endpoint.starts_with("http://")) return false;
+
+            // HTTP is permitted only for an *exact* loopback authority.
+            // Prefix matching accepted localhost.attacker.example, a userinfo
+            // origin such as localhost@attacker.example, and 127.0.0.1.evil.
+            // Any of these could receive the user's Authorization bearer key.
+            std::string_view remainder = endpoint.substr(7u);
+            const std::size_t delimiter = remainder.find_first_of("/?#");
+            const std::string_view authority = remainder.substr(0u, delimiter);
+            if (authority.empty() || authority.find('@') != std::string_view::npos)
+                return false;
+            std::string_view hostname = authority;
+            std::string_view port;
+            if (authority.starts_with("["))
+            {
+                const std::size_t close = authority.find(']');
+                if (close == std::string_view::npos) return false;
+                hostname = authority.substr(0u, close + 1u);
+                if (close + 1u < authority.size())
+                {
+                    if (authority[close + 1u] != ':') return false;
+                    port = authority.substr(close + 2u);
+                    if (port.empty()) return false;
+                }
+            }
+            else
+            {
+                const std::size_t colon = authority.find(':');
+                if (colon != std::string_view::npos)
+                {
+                    hostname = authority.substr(0u, colon);
+                    port = authority.substr(colon + 1u);
+                    if (port.empty()) return false;
+                }
+            }
+            if (hostname != "localhost" && hostname != "127.0.0.1" &&
+                hostname != "[::1]")
+                return false;
+            if (!port.empty())
+            {
+                std::uint32_t value = 0u;
+                for (char digit : port)
+                {
+                    if (digit < '0' || digit > '9') return false;
+                    const std::uint32_t unit =
+                        static_cast<std::uint32_t>(digit - '0');
+                    if (value > (65535u - unit) / 10u) return false;
+                    value = value * 10u + unit;
+                }
+                if (value == 0u) return false;
+            }
+            return true;
         }
 
         class SSEDecoder final
@@ -75,20 +127,35 @@ export namespace kairo::ai
             template<class Consumer>
             void Feed(std::string_view chunk, Consumer&& consume)
             {
-                if (m_Buffer.size() + chunk.size() > m_MaximumBytes)
-                    throw std::length_error("OpenAI-compatible SSE event exceeds its safety limit.");
-                m_Buffer.append(chunk);
-                for (;;)
+                // Transport chunking is not an SSE message boundary: one
+                // HTTP callback can contain thousands of small valid events.
+                // Applying the per-event safety limit to the WHOLE chunk
+                // rejected perfectly valid streamed responses. Assemble one
+                // event at a time, requiring only bounded event storage.
+                for (const char character : chunk)
                 {
-                    const std::size_t lf = m_Buffer.find("\n\n");
-                    const std::size_t crlf = m_Buffer.find("\r\n\r\n");
-                    std::size_t end = std::min(lf, crlf);
-                    if (lf == std::string::npos) end = crlf;
-                    if (crlf == std::string::npos) end = lf;
-                    if (end == std::string::npos) break;
-                    const std::size_t separator = end == crlf ? 4u : 2u;
-                    ConsumeEvent(std::string_view(m_Buffer).substr(0u, end), consume);
-                    m_Buffer.erase(0u, end + separator);
+                    m_Buffer.push_back(character);
+                    const bool crlf = m_Buffer.ends_with("\r\n\r\n");
+                    const bool lf = !crlf && m_Buffer.ends_with("\n\n");
+                    if (crlf || lf)
+                    {
+                        const std::size_t separator = crlf ? 4u : 2u;
+                        const std::size_t eventBytes = m_Buffer.size() - separator;
+                        if (eventBytes > m_MaximumBytes)
+                            throw std::length_error(
+                                "OpenAI-compatible SSE event exceeds its safety limit.");
+                        ConsumeEvent(std::string_view(m_Buffer.data(), eventBytes), consume);
+                        m_Buffer.clear();
+                    }
+                    else if (m_Buffer.size() > m_MaximumBytes &&
+                        m_Buffer.size() - m_MaximumBytes > 4u)
+                    {
+                        // Permit only the possible trailing delimiter bytes
+                        // beyond the payload limit. The upper bound holds
+                        // even for a malicious stream with no terminator.
+                        throw std::length_error(
+                            "OpenAI-compatible SSE event exceeds its safety limit.");
+                    }
                 }
             }
 

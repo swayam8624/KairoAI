@@ -72,6 +72,73 @@ TEST_CASE("OpenAI-compatible provider decodes fragmented text and usage streams"
     CHECK(transport->SeenTimeoutMilliseconds == 120'000u);
 }
 
+TEST_CASE("OpenAI-compatible SSE limit applies to each event, not transport chunk", "[KairoAI][Cloud][SSE]")
+{
+    auto transport = std::make_shared<FakeTransport>();
+    const std::string oneEvent =
+        "data: {\"choices\":[{\"delta\":{\"content\":\"A\"}}]}\n\n";
+    // Every event is below 64 bytes; the concatenated transport chunk is not.
+    REQUIRE(oneEvent.size() < 64u);
+    transport->Chunks = {
+        oneEvent + oneEvent + oneEvent + oneEvent + "data: [DONE]\n\n"
+    };
+    OpenAICompatibleProvider provider({
+        .Endpoint = "https://example.test/chat",
+        .APIKey = "secret",
+        .MaximumEventBytes = 64u
+    }, transport);
+    const Response response = provider.Execute(RequestWithTool(), {}, {});
+    REQUIRE(response.Text == "AAAA");
+}
+
+TEST_CASE("OpenAI-compatible SSE refuses an over-limit unterminated event", "[KairoAI][Cloud][SSE]")
+{
+    auto transport = std::make_shared<FakeTransport>();
+    transport->Chunks = { std::string(120u, 'x') };
+    OpenAICompatibleProvider provider({
+        .Endpoint = "https://example.test/chat",
+        .APIKey = "secret",
+        .MaximumEventBytes = 32u
+    }, transport);
+    REQUIRE_THROWS_AS(provider.Execute(RequestWithTool(), {}, {}), std::length_error);
+}
+
+TEST_CASE("OpenAI-compatible local HTTP origin must be exact loopback", "[KairoAI][Cloud][Security]")
+{
+    auto transport = std::make_shared<FakeTransport>();
+    const auto valid = {
+        "http://localhost:11434/v1/chat/completions",
+        "http://127.0.0.1:8080/",
+        "http://[::1]:5500/api",
+        "https://example.test/v1/chat/completions"
+    };
+    for (const char* endpoint : valid)
+    {
+        CHECK_NOTHROW(OpenAICompatibleProvider(
+            { .Endpoint = endpoint, .APIKey = "secret" }, transport));
+    }
+
+    const auto spoofed = {
+        "http://localhost.attacker.example/steal",
+        "http://localhost@attacker.example/steal",
+        "http://127.0.0.1.evil.example/steal",
+        "http://localhost:443@attacker.example/",
+        "http://[::1]@attacker.example/",
+        "http://localhost:99999/v1/chat",
+        "http://localhost:0/v1/chat",
+        "http://localhost:any/v1/chat",
+        "http://localhost:/v1/chat",
+        "http://localhostevil/v1/chat",
+        "http://127.0.0.1.2:9000/"
+    };
+    for (const char* endpoint : spoofed)
+    {
+        CHECK_THROWS_AS(OpenAICompatibleProvider(
+            { .Endpoint = endpoint, .APIKey = "secret" }, transport),
+            std::invalid_argument);
+    }
+}
+
 TEST_CASE("OpenAI-compatible provider assembles fragmented tool calls once", "[KairoAI][Cloud][Tools]")
 {
     auto transport = std::make_shared<FakeTransport>();
