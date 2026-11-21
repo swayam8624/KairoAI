@@ -1,3 +1,9 @@
+// TEACHING MAP — AIToolPolicy.cppm
+// Separates Ask/Plan/Agent permissions, registered host capabilities and exact tool-call
+// approval. DeviceAgent may propose actions, but this module must authorize each
+// invocation independently of model text.
+// See READING_ORDER.md for cross-module API flow, tests and safety boundaries.
+
 module;
 
 #include <cstdint>
