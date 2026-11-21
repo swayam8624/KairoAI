@@ -1,3 +1,4 @@
+// TEACHING MAP: AI permission policy separates model-proposed tool calls from host-authorized execution. Providers handle generation, the host owns tools and approvals; never let a model response itself become authority.
 module;
 
 #include <cstdint>
