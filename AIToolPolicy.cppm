@@ -111,6 +111,9 @@ export namespace kairo::ai
     class ToolRegistry final
     {
     public:
+        /// Register a host-owned callable behind an explicit capability.
+        /// The provider cannot add executable tools merely by hallucinating
+        /// names; duplicate registrations are rejected.
         void Register(RegisteredTool tool, ToolHandler handler)
         {
             if (!IsToolName(tool.Name) || tool.Description.empty() || !handler)
