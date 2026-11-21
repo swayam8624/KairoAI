@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Optional provider protocol translation from public Kairo AI requests to OpenAI-compatible transport
+// fields and streamed events. Credential and transport concerns stay outside core.
+// See docs/SOURCE_READING_ORDER.md.
+
 module;
 
 #include <algorithm>
