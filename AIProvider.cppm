@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Provider execution/cancellation boundary. RequestTask owns the std::jthread and promise/future
+// lifetime; KairoAICloud or MockAIProvider implement Execute without gaining host tool authority.
+// Read docs/SOURCE_READING_ORDER.md for the authority and data flow.
+
 module;
 
 #include <exception>
@@ -38,6 +43,13 @@ export namespace kairo::ai
     class RequestTask final
     {
     public:
+        // Teaching: validate request and provider ownership on the caller
+        // thread, then execute on one owned jthread. Future exceptions
+        // propagate through Wait; destruction requests stop and joins.
+        /// Validate request limits before worker allocation and capture
+        /// provider lifetime in a joining std::jthread. The returned future
+        /// conveys response/exception; a stop token requests cancellation
+        /// without authorizing any device/editor tool operation.
         RequestTask(std::shared_ptr<Provider> provider, Request request,
             StreamSink sink = {}, RequestLimits limits = {})
         {
@@ -57,6 +69,9 @@ export namespace kairo::ai
         RequestTask(RequestTask&&) = delete;
         RequestTask& operator=(RequestTask&&) = delete;
 
+        // Teaching: cooperative cancellation signals the provider; it does
+        // not forcibly terminate a blocked transport. The provider must
+        // check the stop token and keep callback lifetimes safe.
         void Cancel() noexcept { m_Worker.request_stop(); }
         [[nodiscard]] bool StopRequested() const noexcept { return m_Worker.get_stop_token().stop_requested(); }
         [[nodiscard]] bool Ready() const

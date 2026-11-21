@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Provider-neutral Request, Response, ToolCall and StreamEvent schemas plus bounded input validation.
+// AIProvider uses these contracts and ToolPolicy separately authorizes side effects.
+// Read docs/SOURCE_READING_ORDER.md for the authority and data flow.
+
 module;
 
 #include <algorithm>
@@ -107,6 +112,9 @@ export namespace kairo::ai
     /// Output: no value; throws before network or local inference work begins.
     /// Task: bound memory/cost exposure and reject ambiguous tool contracts at
     /// the shared API boundary, including direct construction by tests/tools.
+    // Teaching: reject oversized or malformed provider inputs *before* a
+    // network connection or worker task is created. RequestTask invokes this
+    // function, and Mock/Cloud implementations rely on these same limits.
     inline void ValidateRequest(const Request& request, const RequestLimits& limits = {})
     {
         if (limits.MaximumMessages == 0u || limits.MaximumContextBytes == 0u ||

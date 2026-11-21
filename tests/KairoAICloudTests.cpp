@@ -1,3 +1,7 @@
+// SOURCE STUDY NOTE:
+// Injected transport tests for cloud payload/SSE behavior and errors; credential-free CI.
+// See docs/SOURCE_READING_ORDER.md.
+
 #include <cstddef>
 #include <memory>
 #include <stdexcept>

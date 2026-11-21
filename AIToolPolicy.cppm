@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Host authorization firewall for AI-proposed tool calls: mode, capability and exact-call approval
+// determine whether a registered tool may execute; model output is not authority.
+// Read docs/SOURCE_READING_ORDER.md for the authority and data flow.
+
 module;
 
 #include <cstdint>
@@ -62,6 +67,9 @@ export namespace kairo::ai
         { return Decision == AuthorizationDecision::Allowed; }
     };
 
+    // Teaching: authorization is a host-side decision, not a model response.
+    // Bind approval to call ID, tool name and arguments; any difference in
+    // a later proposal requires new permission. Modes bound capabilities.
     [[nodiscard]] inline Authorization AuthorizeTool(InteractionMode mode,
         const RegisteredTool& tool, const ToolCall& call,
         const std::optional<ToolApproval>& approval = std::nullopt)
@@ -103,6 +111,9 @@ export namespace kairo::ai
     class ToolRegistry final
     {
     public:
+        /// Register a host-owned callable behind an explicit capability.
+        /// The provider cannot add executable tools merely by hallucinating
+        /// names; duplicate registrations are rejected.
         void Register(RegisteredTool tool, ToolHandler handler)
         {
             if (!IsToolName(tool.Name) || tool.Description.empty() || !handler)

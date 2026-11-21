@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Evidence, intent and receipt tests. Confidence does not imply execution authorization or
+// verification success.
+// See docs/SOURCE_READING_ORDER.md.
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <limits>

@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Host-perception evidence, typed device-intent proposals, execution and verification receipts. It
+// records intent and actual adapter outcomes separately from ToolPolicy authorization.
+// Read docs/SOURCE_READING_ORDER.md for the authority and data flow.
+
 module;
 
 #include <algorithm>
@@ -134,6 +139,10 @@ export namespace kairo::ai::device
         VerificationPlan Verification;
     };
 
+    /// Treat perception-derived proposed actions as untrusted until a
+    /// versioned contract declares preconditions, expected effects, risk,
+    /// verification and rollback semantics. Successful intent parsing is
+    /// not successful execution or postcondition verification.
     inline void ValidateActionContract(const ActionContract& contract)
     {
         if (contract.SchemaVersion != 1u)
@@ -289,6 +298,9 @@ export namespace kairo::ai::device
     class IntentRouter final
     {
     public:
+        /// Bind an exact application/intent pair to a known host action.
+        /// Reject duplicate bindings so the same proposal cannot silently
+        /// select a different adapter action after registration.
         void Register(ActionBinding binding)
         {
             ValidateBinding(binding);
@@ -302,6 +314,9 @@ export namespace kairo::ai::device
             m_Bindings.push_back(std::move(binding));
         }
 
+        // Teaching: synthesize an *intent proposal* from typed, bounded
+        // perception evidence. The caller still needs ToolPolicy approval,
+        // an adapter execution receipt, and independent verification.
         [[nodiscard]] ActionProposal Propose(const IntentRequest& request) const
         {
             ValidateRequest(request);

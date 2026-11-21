@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Core request/stream/task tests, including mock provider and cancellation. Should not need external
+// credentials.
+// See docs/SOURCE_READING_ORDER.md.
+
 #include <atomic>
 #include <chrono>
 #include <memory>

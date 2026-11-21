@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Deterministic offline provider for test cases. Validates the public provider contract without HTTP
+// credentials or networking.
+// Read docs/SOURCE_READING_ORDER.md for the authority and data flow.
+
 module;
 
 #include <chrono>
