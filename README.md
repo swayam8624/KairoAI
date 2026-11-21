@@ -1,3 +1,7 @@
+> **Learning-first source guide:** [READING_ORDER.md](READING_ORDER.md) gives a linked order for the actual code/tests and explains the interfaces to other Kairo modules.
+>
+> **Open source:** original code remains under its existing [license](LICENSE); learning and continued development are welcome under those terms. Third-party dependencies/assets keep their own licenses. This guide is not an assertion that every source function has been annotated or native tests rerun.
+
 # KairoAI
 
 KairoAI is the provider-neutral AI boundary for Kairo development tools and
