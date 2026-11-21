@@ -1,3 +1,9 @@
+// TEACHING MAP — OpenAICompatibleProvider.cppm
+// Adapter for an OpenAI-compatible Chat Completions transport: encodes bounded requests,
+// assembles streamed SSE events and tool-call JSON, and reports response/usage. Transport
+// is injected for tests and secret handling must not leak keys.
+// See READING_ORDER.md for public APIs, delegated execution and test contracts.
+
 module;
 
 #include <algorithm>
