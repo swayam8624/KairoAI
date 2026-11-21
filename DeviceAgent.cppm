@@ -307,6 +307,9 @@ export namespace kairo::ai::device
             m_Bindings.push_back(std::move(binding));
         }
 
+        // Teaching: synthesize an *intent proposal* from typed, bounded
+        // perception evidence. The caller still needs ToolPolicy approval,
+        // an adapter execution receipt, and independent verification.
         [[nodiscard]] ActionProposal Propose(const IntentRequest& request) const
         {
             ValidateRequest(request);
