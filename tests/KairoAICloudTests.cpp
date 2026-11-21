@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/KairoAICloudTests.cpp
+// Tests cloud adapter parsing, streaming and transport failure with an injected test
+// transport. Native network credentials should not be necessary in CI.
+// See READING_ORDER.md for public APIs, delegated execution and test contracts.
+
 #include <cstddef>
 #include <memory>
 #include <stdexcept>
