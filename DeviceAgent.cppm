@@ -139,6 +139,10 @@ export namespace kairo::ai::device
         VerificationPlan Verification;
     };
 
+    /// Treat perception-derived proposed actions as untrusted until a
+    /// versioned contract declares preconditions, expected effects, risk,
+    /// verification and rollback semantics. Successful intent parsing is
+    /// not successful execution or postcondition verification.
     inline void ValidateActionContract(const ActionContract& contract)
     {
         if (contract.SchemaVersion != 1u)
@@ -294,6 +298,9 @@ export namespace kairo::ai::device
     class IntentRouter final
     {
     public:
+        /// Bind an exact application/intent pair to a known host action.
+        /// Reject duplicate bindings so the same proposal cannot silently
+        /// select a different adapter action after registration.
         void Register(ActionBinding binding)
         {
             ValidateBinding(binding);
