@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/KairoAITests.cpp
+// Tests bounded AI request contracts, mock provider streaming and cancellation. Their
+// deterministic fixtures check API behavior, not real cloud availability.
+// See READING_ORDER.md for public APIs, delegated execution and test contracts.
+
 #include <atomic>
 #include <chrono>
 #include <memory>

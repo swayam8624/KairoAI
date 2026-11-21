@@ -1,3 +1,9 @@
+// TEACHING MAP — AIProvider.cppm
+// Streaming provider interface and cancellation/lifetime contracts. MockAIProvider and
+// OpenAICompatibleProvider implement it; callers supply callbacks and stop tokens, not
+// direct platform transport assumptions.
+// See READING_ORDER.md for cross-module API flow, tests and safety boundaries.
+
 module;
 
 #include <exception>

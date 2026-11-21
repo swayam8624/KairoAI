@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/GameplayAITests.cpp
+// Tests optional game-facing AI behavior independent of cloud transport and tool-policy
+// permissions; deterministic cases provide an oracle for gameplay decisions.
+// See READING_ORDER.md for public APIs, delegated execution and test contracts.
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <stdexcept>

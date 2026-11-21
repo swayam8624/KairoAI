@@ -1,3 +1,9 @@
+// TEACHING MAP — AIContracts.cppm
+// Provider-neutral bounded Request, Message, ToolDefinition, Usage and response types.
+// Provider adapters read these contracts; AIToolPolicy separately authorizes tools.
+// Tool-call JSON is data, not an executable instruction.
+// See READING_ORDER.md for cross-module API flow, tests and safety boundaries.
+
 module;
 
 #include <algorithm>
