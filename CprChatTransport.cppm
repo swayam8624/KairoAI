@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// CPR-backed HTTP/SSE adapter for optional cloud requests. Parses bounded streams and delegates
+// provider semantics to OpenAICompatibleProvider, using HTTPS and safe error reporting.
+// See docs/SOURCE_READING_ORDER.md.
+
 module;
 
 #include <atomic>
