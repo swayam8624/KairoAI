@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/DeviceAgentTests.cpp
+// Tests observation evidence, intent proposals, execution receipts and state verification,
+// including refusal. Real host OS actions still require separate explicit authorization.
+// See READING_ORDER.md for public APIs, delegated execution and test contracts.
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <limits>
