@@ -46,6 +46,10 @@ export namespace kairo::ai
         // Teaching: validate request and provider ownership on the caller
         // thread, then execute on one owned jthread. Future exceptions
         // propagate through Wait; destruction requests stop and joins.
+        /// Validate request limits before worker allocation and capture
+        /// provider lifetime in a joining std::jthread. The returned future
+        /// conveys response/exception; a stop token requests cancellation
+        /// without authorizing any device/editor tool operation.
         RequestTask(std::shared_ptr<Provider> provider, Request request,
             StreamSink sink = {}, RequestLimits limits = {})
         {
