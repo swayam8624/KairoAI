@@ -1,3 +1,7 @@
+// SOURCE STUDY NOTE:
+// Gameplay blackboard/planning tests, separate from spatial path execution or scene ownership.
+// See docs/SOURCE_READING_ORDER.md.
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <stdexcept>
