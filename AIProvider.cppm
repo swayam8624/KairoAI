@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Provider execution/cancellation boundary. RequestTask owns the std::jthread and promise/future
+// lifetime; KairoAICloud or MockAIProvider implement Execute without gaining host tool authority.
+// Read docs/SOURCE_READING_ORDER.md for the authority and data flow.
+
 module;
 
 #include <exception>
