@@ -43,6 +43,9 @@ export namespace kairo::ai
     class RequestTask final
     {
     public:
+        // Teaching: validate request and provider ownership on the caller
+        // thread, then execute on one owned jthread. Future exceptions
+        // propagate through Wait; destruction requests stop and joins.
         RequestTask(std::shared_ptr<Provider> provider, Request request,
             StreamSink sink = {}, RequestLimits limits = {})
         {
@@ -62,6 +65,9 @@ export namespace kairo::ai
         RequestTask(RequestTask&&) = delete;
         RequestTask& operator=(RequestTask&&) = delete;
 
+        // Teaching: cooperative cancellation signals the provider; it does
+        // not forcibly terminate a blocked transport. The provider must
+        // check the stop token and keep callback lifetimes safe.
         void Cancel() noexcept { m_Worker.request_stop(); }
         [[nodiscard]] bool StopRequested() const noexcept { return m_Worker.get_stop_token().stop_requested(); }
         [[nodiscard]] bool Ready() const
