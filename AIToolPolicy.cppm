@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Host authorization firewall for AI-proposed tool calls: mode, capability and exact-call approval
+// determine whether a registered tool may execute; model output is not authority.
+// Read docs/SOURCE_READING_ORDER.md for the authority and data flow.
+
 module;
 
 #include <cstdint>
