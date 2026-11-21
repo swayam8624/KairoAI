@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Gameplay decision and blackboard contracts. KairoSpatial owns pathfinding; KairoEngineCore and runtime
+// adapters execute planned movement rather than the AI core owning scene/physics objects.
+// Read docs/SOURCE_READING_ORDER.md for the authority and data flow.
+
 module;
 
 #include <algorithm>
