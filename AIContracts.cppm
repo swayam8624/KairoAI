@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Provider-neutral Request, Response, ToolCall and StreamEvent schemas plus bounded input validation.
+// AIProvider uses these contracts and ToolPolicy separately authorizes side effects.
+// Read docs/SOURCE_READING_ORDER.md for the authority and data flow.
+
 module;
 
 #include <algorithm>
