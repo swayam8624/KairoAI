@@ -1,3 +1,9 @@
+// TEACHING MAP — DeviceAgent.cppm
+// Combines gesture/speech/screen observation evidence into bounded action proposals,
+// execution receipts and postcondition verification. It does not grant permissions;
+// AIToolPolicy and the host own consent.
+// See READING_ORDER.md for cross-module API flow, tests and safety boundaries.
+
 module;
 
 #include <algorithm>
