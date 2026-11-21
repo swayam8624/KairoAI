@@ -1,3 +1,9 @@
+// TEACHING MAP — MockAIProvider.cppm
+// Deterministic credential-free provider for contract testing. Its artificial streaming
+// responses exercise AIProvider APIs without a real network; production transport behavior
+// is a separate gate.
+// See READING_ORDER.md for cross-module API flow, tests and safety boundaries.
+
 module;
 
 #include <chrono>
