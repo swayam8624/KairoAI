@@ -1,3 +1,8 @@
+// SOURCE STUDY NOTE:
+// Host-perception evidence, typed device-intent proposals, execution and verification receipts. It
+// records intent and actual adapter outcomes separately from ToolPolicy authorization.
+// Read docs/SOURCE_READING_ORDER.md for the authority and data flow.
+
 module;
 
 #include <algorithm>
