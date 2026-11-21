@@ -1,3 +1,9 @@
+// TEACHING MAP — GameplayAI.cppm
+// Optional game-facing AI policy/behavior contracts. Game runtime consumers must
+// distinguish deterministic gameplay decisions from cloud provider message and tool
+// authorization systems.
+// See READING_ORDER.md for cross-module API flow, tests and safety boundaries.
+
 module;
 
 #include <algorithm>
