@@ -1,3 +1,9 @@
+// TEACHING MAP — CprChatTransport.cppm
+// Concrete HTTPS/CPR network transport implementation behind ChatStreamTransport. The
+// public provider module owns message protocol rules; this transport owns HTTP lifetime,
+// cancellation and bounded body streaming.
+// See READING_ORDER.md for public APIs, delegated execution and test contracts.
+
 module;
 
 #include <atomic>
