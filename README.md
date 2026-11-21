@@ -1,5 +1,7 @@
 # KairoAI
 
+> **Source-study guide:** Use [docs/SOURCE_READING_ORDER.md](docs/SOURCE_READING_ORDER.md) to trace provider requests, cancellation, exact-call tool approval, device proposals, verification and optional cloud transport; the provider's model output is not itself execution authority. Existing [LICENSE](LICENSE) remains unchanged.
+
 KairoAI is the provider-neutral AI boundary for Kairo development tools and
 optional game services. It deliberately separates request orchestration from
 editor permissions, cloud transports, local inference, and gameplay policy.
