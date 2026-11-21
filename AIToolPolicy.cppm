@@ -67,6 +67,9 @@ export namespace kairo::ai
         { return Decision == AuthorizationDecision::Allowed; }
     };
 
+    // Teaching: authorization is a host-side decision, not a model response.
+    // Bind approval to call ID, tool name and arguments; any difference in
+    // a later proposal requires new permission. Modes bound capabilities.
     [[nodiscard]] inline Authorization AuthorizeTool(InteractionMode mode,
         const RegisteredTool& tool, const ToolCall& call,
         const std::optional<ToolApproval>& approval = std::nullopt)
