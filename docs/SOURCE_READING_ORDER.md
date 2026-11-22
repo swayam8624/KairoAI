@@ -1,4 +1,5 @@
 # Teaching source map — KairoAI
+**Deep source walkthrough:** [Tool proposals, approval and action verification](AI_PROPOSAL_TO_APPROVED_ACTION.md).
 
 Provider-neutral request, permission and tool execution boundaries.
 
