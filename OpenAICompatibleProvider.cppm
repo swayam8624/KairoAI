@@ -1,3 +1,18 @@
+// TEACHING MODULE: HTTPS/loopback-HTTP transport adapter for an
+// OpenAI-compatible streaming chat endpoint, not a tool-execution engine.
+//
+// Provider serializes bounded role/messages/tool definitions and invokes
+// an injected ChatStreamTransport. SSEDecoder assembles partial JSON
+// events under per-event and per-response byte caps; tool-call arguments
+// may arrive in multiple deltas and must be validated before becoming a
+// proposed ToolCall. Canonical tool names are encoded on the wire and
+// mapped back, with collisions rejected.
+//
+// Bearer APIKey is host-owned, passed to transport headers, and must
+// never be returned as ordinary model context or tool output. HTTPS
+// endpoint policy, stop token, size limits and [DONE] are transport
+// correctness checks; none grants authorization for suggested tool
+// calls. Actual permission belongs to Kairo.AI.ToolPolicy.
 module;
 
 #include <algorithm>
@@ -118,7 +133,9 @@ export namespace kairo::ai
             return true;
         }
 
-        class SSEDecoder final
+        // Assemble event boundaries across arbitrary network chunk splits,
+    // rejecting excessive buffering rather than trusting stream length.
+    class SSEDecoder final
         {
         public:
             explicit SSEDecoder(std::size_t maximumBytes) : m_MaximumBytes(maximumBytes)
@@ -222,6 +239,8 @@ export namespace kairo::ai
         }
     }
 
+    // Owns provider configuration and transport adapter. It only
+    // produces text/tool call proposals and metering, not host actions.
     class OpenAICompatibleProvider final : public Provider
     {
     public:
