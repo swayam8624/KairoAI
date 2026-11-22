@@ -1,4 +1,19 @@
-// TEACHING MAP: AI permission policy separates model-proposed tool calls from host-authorized execution. Providers handle generation, the host owns tools and approvals; never let a model response itself become authority.
+// TEACHING MAP: The AI model can *propose* a tool name and argument
+// string, but only host-registered ToolRegistry handlers can execute.
+// AuthorizeTool applies a capability policy before invoking a handler:
+// credential access is always denied, Ask/Plan permit only ReadProject,
+// and Agent requires explicit approval for each side-effecting call.
+//
+// Approval is bound to exact ToolCall.ID, Name and Arguments, not just a
+// generic "yes" for the application or a tool category. A changed
+// argument string after approval must fail. The host retains network,
+// process, filesystem and credential authority; the language model
+// cannot grant itself those capabilities.
+//
+// Tool output may be untrusted and must not bypass authorization on
+// subsequent calls. Tests/KairoAITests.cpp should verify every mode,
+// capability, missing approval, mismatch and denied handler invocation.
+
 module;
 
 #include <cstdint>
@@ -63,6 +78,9 @@ export namespace kairo::ai
         { return Decision == AuthorizationDecision::Allowed; }
     };
 
+    // Enforce capability, interaction mode and exact-call approval before
+    // any host side effect. This function only returns a decision; it
+    // does not run the registered handler.
     [[nodiscard]] inline Authorization AuthorizeTool(InteractionMode mode,
         const RegisteredTool& tool, const ToolCall& call,
         const std::optional<ToolApproval>& approval = std::nullopt)
@@ -113,6 +131,9 @@ export namespace kairo::ai
                 throw std::invalid_argument("AI tool is already registered.");
         }
 
+        // Look up a host-owned handler, authorize the proposed call, and
+        // invoke only after Allowed(). An unregistered tool is an error,
+        // not permission to execute a guessed shell operation.
         [[nodiscard]] ToolExecution Execute(InteractionMode mode, const ToolCall& call,
             const std::optional<ToolApproval>& approval = std::nullopt) const
         {
