@@ -1,4 +1,5 @@
 # KairoAI
+**Deep source walkthrough:** [Tool proposals, approval and action verification](docs/AI_PROPOSAL_TO_APPROVED_ACTION.md).
 
 KairoAI is the provider-neutral AI boundary for Kairo development tools and
 optional game services. It deliberately separates request orchestration from
