@@ -1,3 +1,18 @@
+// TEACHING MODULE: DeviceAgent's multimodal evidence is a *proposal*
+// input, not executable authority. IntentRouter maps one active
+// application + intent to registered tool metadata, checks required
+// evidence modalities and confidence thresholds, and emits an exact
+// ToolCall ID only on success.
+//
+// ActionContract additionally records preconditions, expected effects,
+// risk, approval policy, reversibility and bounded post-execution
+// verification. Irreversible/destructive actions require more stringent
+// host approval. A ReplayRecord links the proposal, receipt and
+// observed-state fingerprint for auditability.
+//
+// The actual host must still call Kairo.AI.ToolPolicy::AuthorizeTool
+// and execute a registered adapter; screen/speech/gesture evidence
+// alone cannot authorize a process/network/credential operation.
 module;
 
 #include <algorithm>
@@ -286,6 +301,8 @@ export namespace kairo::ai::device
     /// Task: bind multimodal intent to a narrow, visible app action without
     /// performing side effects. The caller must still pass the proposal to
     /// `Kairo.AI.ToolPolicy` for capability and approval enforcement.
+    // Route evidence to a narrow host action proposal. No side effect
+    // occurs inside Propose; callers must enforce ToolPolicy afterward.
     class IntentRouter final
     {
     public:
@@ -302,6 +319,8 @@ export namespace kairo::ai::device
             m_Bindings.push_back(std::move(binding));
         }
 
+        // Match BOTH application and intent, validate modality and
+        // confidence, then issue a unique ID for later exact approval.
         [[nodiscard]] ActionProposal Propose(const IntentRequest& request) const
         {
             ValidateRequest(request);
