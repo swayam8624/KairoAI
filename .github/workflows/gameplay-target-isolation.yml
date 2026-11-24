@@ -1,0 +1,35 @@
+name: Gameplay target isolation
+on:
+  pull_request:
+  push:
+    branches: [main, refactor/gameplay-runtime-split]
+permissions:
+  contents: read
+jobs:
+  gameplay:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        assistant: ['ON', 'OFF']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install module-capable toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 clang-tools-18 ninja-build
+      - name: Configure
+        run: cmake -S . -B build/isolation -G Ninja -DCMAKE_CXX_COMPILER=clang++-18 -DKAIRO_AI_BUILD_ASSISTANT=${{ matrix.assistant }} -DKAIRO_AI_BUILD_TESTS=ON -DKAIRO_AI_BUILD_CLOUD_PROVIDER=OFF
+      - name: Build and test
+        run: |
+          cmake --build build/isolation --parallel 2
+          ctest --test-dir build/isolation --output-on-failure --no-tests=error
+      - name: Check excluded targets are absent
+        if: matrix.assistant == 'OFF'
+        run: |
+          ninja -C build/isolation -t targets all > build/isolation/targets.txt
+          grep -q 'KairoGameplayAI' build/isolation/targets.txt
+          if grep -Eq '(^|/)(KairoAI|KairoAITests|KairoAIDeviceAgentTests|KairoAICloud)(:|/|\.dir)' build/isolation/targets.txt; then
+            echo "Assistant target leaked into gameplay-only configuration"
+            exit 1
+          fi
