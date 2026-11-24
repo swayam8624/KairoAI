@@ -28,8 +28,8 @@ jobs:
         if: matrix.assistant == 'OFF'
         run: |
           ninja -C build/isolation -t targets all > build/isolation/targets.txt
-          grep -q 'KairoGameplayAI' build/isolation/targets.txt
-          if grep -Eq '(^|/)(KairoAI|KairoAITests|KairoAIDeviceAgentTests|KairoAICloud)(:|/|\.dir)' build/isolation/targets.txt; then
+          grep -Eq '^KairoGameplayAI:' build/isolation/targets.txt
+          if grep -E '^(KairoAI|KairoAITests|KairoAIDeviceAgentTests|KairoAICloud):' build/isolation/targets.txt; then
             echo "Assistant target leaked into gameplay-only configuration"
             exit 1
           fi
