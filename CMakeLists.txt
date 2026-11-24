@@ -15,11 +15,23 @@ elseif(MSVC)
     add_compile_options(/W4 /permissive-)
 endif()
 
+# Gameplay AI is deterministic and independent of assistant/provider tooling.
+# A shipped game can link this target without importing device agents, chat
+# contracts, mock providers, or the optional cloud transport.
+add_library(KairoGameplayAI)
+add_library(Kairo::GameplayAI ALIAS KairoGameplayAI)
+target_sources(KairoGameplayAI PUBLIC FILE_SET CXX_MODULES
+    BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR} FILES GameplayAI.cppm)
+target_compile_features(KairoGameplayAI PUBLIC cxx_std_23)
+set_property(TARGET KairoGameplayAI PROPERTY COMPILE_WARNING_AS_ERROR ON)
+
+# Retain the existing aggregate API for Editor and standalone consumers.
 add_library(KairoAI)
 add_library(Kairo::AI ALIAS KairoAI)
 target_sources(KairoAI PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR} FILES
     AIContracts.cppm AIProvider.cppm AIToolPolicy.cppm MockAIProvider.cppm DeviceAgent.cppm
-    GameplayAI.cppm KairoAI.cppm)
+    KairoAI.cppm)
+target_link_libraries(KairoAI PUBLIC KairoGameplayAI)
 set_property(TARGET KairoAI PROPERTY COMPILE_WARNING_AS_ERROR ON)
 
 if(KAIRO_AI_BUILD_CLOUD_PROVIDER)
@@ -79,7 +91,7 @@ if(KAIRO_AI_BUILD_TESTS)
         set_property(TARGET KairoAIDeviceAgentTests PROPERTY COMPILE_WARNING_AS_ERROR ON)
     add_test(NAME KairoAIDeviceAgentTests COMMAND KairoAIDeviceAgentTests)
     add_executable(KairoAIGameplayTests tests/GameplayAITests.cpp)
-    target_link_libraries(KairoAIGameplayTests PRIVATE KairoAI Catch2::Catch2WithMain)
+    target_link_libraries(KairoAIGameplayTests PRIVATE Kairo::GameplayAI Catch2::Catch2WithMain)
         if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 23)
             target_compile_options(KairoAIGameplayTests PRIVATE -Wno-c2y-extensions)
         endif()
